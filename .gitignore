@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.venv/
+env/
+
+# Node
+node_modules/
+.next/
+out/
+
+# macOS
+.DS_Store
+
+# Editors
+.vscode/
+.idea/
+
+# Env files
+.env
+
+# App data
+backend/uploads/
+backend/reports/
+data/generated/
