@@ -19,28 +19,31 @@ type DiagnosticsResponse = {
 };
 
 type AnalysisResponse = {
-  metric_type: string;
-  groups: {
-    control_label: string;
-    treatment_label: string;
+    metric_type: "binary" | "continuous";
+    outcome_column?: string;
+    groups: {
+      control_label: string;
+      treatment_label: string;
+    };
+    sample_sizes: Record<string, number>;
+    outcome_values?: Record<string, number>;
+    outcome_rates?: Record<string, number>;
+    outcome_means?: Record<string, number>;
+    effect: {
+      absolute_lift: number;
+      relative_lift: number | null;
+    };
+    test_statistic: {
+      test_name: string;
+      stat: number;
+      p_value: number;
+    };
+    confidence_interval_95: {
+      low: number;
+      high: number;
+    };
+    interpretation: string;
   };
-  sample_sizes: Record<string, number>;
-  conversion_counts: Record<string, number>;
-  conversion_rates: Record<string, number>;
-  effect: {
-    absolute_lift: number;
-    relative_lift: number | null;
-  };
-  test_statistic: {
-    z_stat: number;
-    p_value: number;
-  };
-  confidence_interval_95: {
-    low: number;
-    high: number;
-  };
-  interpretation: string;
-};
 
 export default function AnalysisPage() {
   const searchParams = useSearchParams();
@@ -177,7 +180,7 @@ export default function AnalysisPage() {
 
         <h1 className="mt-4 text-3xl font-bold">A/B Test Analysis</h1>
         <p className="mt-2 text-slate-600">
-          Estimate lift, significance, and confidence intervals for the selected binary outcome.
+          Estimate lift, significance, and confidence intervals for the selected experiment outcome.
         </p>
 
         <div className="mt-4 rounded-lg bg-slate-100 p-4 text-sm text-slate-700">
@@ -246,21 +249,27 @@ export default function AnalysisPage() {
         {result && (
           <div className="mt-8 space-y-6">
             <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-              <h2 className="text-xl font-semibold">Conversion Rates</h2>
-              <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                <div className="rounded-xl bg-slate-100 p-4">
-                  <p className="text-sm text-slate-500">{controlLabel}</p>
-                  <p className="mt-1 text-xl font-semibold">
-                    {(result.conversion_rates[controlLabel] * 100).toFixed(2)}%
-                  </p>
+                <h2 className="text-xl font-semibold">
+                    {result.metric_type === "binary" ? "Conversion Rates" : "Outcome Means"}
+                </h2>
+                <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                    <div className="rounded-xl bg-slate-100 p-4">
+                    <p className="text-sm text-slate-500">{controlLabel}</p>
+                    <p className="mt-1 text-xl font-semibold">
+                        {result.metric_type === "binary"
+                        ? `${((result.outcome_rates?.[controlLabel] ?? 0) * 100).toFixed(2)}%`
+                        : (result.outcome_means?.[controlLabel] ?? 0).toFixed(2)}
+                    </p>
+                    </div>
+                    <div className="rounded-xl bg-slate-100 p-4">
+                    <p className="text-sm text-slate-500">{treatmentLabel}</p>
+                    <p className="mt-1 text-xl font-semibold">
+                        {result.metric_type === "binary"
+                        ? `${((result.outcome_rates?.[treatmentLabel] ?? 0) * 100).toFixed(2)}%`
+                        : (result.outcome_means?.[treatmentLabel] ?? 0).toFixed(2)}
+                    </p>
+                    </div>
                 </div>
-                <div className="rounded-xl bg-slate-100 p-4">
-                  <p className="text-sm text-slate-500">{treatmentLabel}</p>
-                  <p className="mt-1 text-xl font-semibold">
-                    {(result.conversion_rates[treatmentLabel] * 100).toFixed(2)}%
-                  </p>
-                </div>
-              </div>
             </div>
 
             <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -269,7 +278,9 @@ export default function AnalysisPage() {
                 <div className="rounded-xl bg-slate-100 p-4">
                   <p className="text-sm text-slate-500">Absolute Lift</p>
                   <p className="mt-1 text-xl font-semibold">
-                    {(result.effect.absolute_lift * 100).toFixed(2)} pp
+                    {result.metric_type === "binary"
+                      ? `${(result.effect.absolute_lift * 100).toFixed(2)} pp`
+                      : result.effect.absolute_lift.toFixed(2)}
                   </p>
                 </div>
                 <div className="rounded-xl bg-slate-100 p-4">
@@ -287,8 +298,8 @@ export default function AnalysisPage() {
               <h2 className="text-xl font-semibold">Statistical Test</h2>
               <div className="mt-4 grid gap-4 sm:grid-cols-3">
                 <div className="rounded-xl bg-slate-100 p-4">
-                  <p className="text-sm text-slate-500">Z Statistic</p>
-                  <p className="mt-1 font-semibold">{result.test_statistic.z_stat}</p>
+                  <p className="text-sm text-slate-500">Test Statistic</p>
+                  <p className="mt-1 font-semibold">{result.test_statistic.stat}</p>
                 </div>
                 <div className="rounded-xl bg-slate-100 p-4">
                   <p className="text-sm text-slate-500">P-value</p>
@@ -311,10 +322,15 @@ export default function AnalysisPage() {
 
             <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
               <h2 className="text-xl font-semibold">95% Confidence Interval</h2>
-              <p className="mt-4 text-lg font-semibold">
-                [{(result.confidence_interval_95.low * 100).toFixed(2)},{" "}
-                {(result.confidence_interval_95.high * 100).toFixed(2)}] percentage points
-              </p>
+                <p className="mt-4 text-lg font-semibold">
+                {result.metric_type === "binary"
+                    ? `[${(result.confidence_interval_95.low * 100).toFixed(2)}, ${(
+                        result.confidence_interval_95.high * 100
+                    ).toFixed(2)}] percentage points`
+                    : `[${result.confidence_interval_95.low.toFixed(2)}, ${result.confidence_interval_95.high.toFixed(
+                        2
+                    )}]`}
+                </p>
             </div>
 
             <div className="rounded-2xl border border-blue-200 bg-blue-50 p-6 shadow-sm">

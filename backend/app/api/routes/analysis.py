@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException
 
 from app.models.schemas import ColumnValidationRequest
-from app.services.ab_analysis import run_binary_ab_analysis
+from app.services.ab_analysis import run_ab_analysis
 from app.services.diagnostics import run_experiment_diagnostics
 
 router = APIRouter(tags=["Diagnostics & Analysis"])
@@ -23,7 +23,7 @@ async def diagnostics(payload: ColumnValidationRequest):
 @router.post("/analyze")
 async def analyze(payload: ColumnValidationRequest):
     try:
-        result = run_binary_ab_analysis(payload.model_dump())
+        result = run_ab_analysis(payload.model_dump())
         return result
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
