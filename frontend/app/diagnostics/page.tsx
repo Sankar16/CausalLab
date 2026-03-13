@@ -88,9 +88,24 @@ export default function DiagnosticsPage() {
   return (
     <main className="min-h-screen bg-slate-50 px-6 py-10 text-slate-900">
       <div className="mx-auto max-w-5xl">
-        <a href="/map-columns" className="text-sm text-slate-500 hover:text-slate-900">
-          ← Back to mapping
-        </a>
+      <a
+        href={`/map-columns?file_id=${encodeURIComponent(
+            fileId
+        )}&treatment_column=${encodeURIComponent(
+            treatmentColumn
+        )}&outcome_column=${encodeURIComponent(
+            outcomeColumn
+        )}&user_id_column=${encodeURIComponent(
+            userIdColumn
+        )}&timestamp_column=${encodeURIComponent(
+            timestampColumn
+        )}&pre_period_column=${encodeURIComponent(
+            prePeriodColumn
+        )}&covariates=${encodeURIComponent(covariateColumns.join(","))}`}
+        className="text-sm text-slate-500 hover:text-slate-900"
+      >
+        ← Back to mapping
+      </a>
 
         <h1 className="mt-4 text-3xl font-bold">Experiment Diagnostics</h1>
         <p className="mt-2 text-slate-600">

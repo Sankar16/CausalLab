@@ -1,7 +1,22 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+
+type DiagnosticsResponse = {
+  treatment_counts: Record<string, number>;
+  srm: {
+    chi_square_stat: number;
+    p_value: number;
+    is_suspected: boolean;
+  };
+  missing_outcome_by_group: Record<string, number>;
+  outcome_summary: {
+    metric_name: string;
+    by_group: Record<string, number>;
+  };
+  warnings: string[];
+};
 
 type AnalysisResponse = {
   metric_type: string;
@@ -45,7 +60,49 @@ export default function AnalysisPage() {
 
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<AnalysisResponse | null>(null);
+  const [diagnostics, setDiagnostics] = useState<DiagnosticsResponse | null>(null);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    const fetchDiagnostics = async () => {
+      if (!fileId || !treatmentColumn || !outcomeColumn) return;
+
+      try {
+        const response = await fetch("http://127.0.0.1:8000/diagnostics", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            file_id: fileId,
+            treatment_column: treatmentColumn,
+            outcome_column: outcomeColumn,
+            user_id_column: userIdColumn || null,
+            timestamp_column: timestampColumn || null,
+            covariate_columns: covariateColumns,
+            pre_period_column: prePeriodColumn || null,
+          }),
+        });
+
+        if (!response.ok) return;
+
+        const data: DiagnosticsResponse = await response.json();
+        setDiagnostics(data);
+      } catch {
+        // Keep analysis page usable even if diagnostics fetch fails
+      }
+    };
+
+    fetchDiagnostics();
+  }, [
+    fileId,
+    treatmentColumn,
+    outcomeColumn,
+    userIdColumn,
+    timestampColumn,
+    prePeriodColumn,
+    covariateColumns,
+  ]);
 
   const handleRunAnalysis = async () => {
     if (!fileId || !treatmentColumn || !outcomeColumn) {
@@ -93,10 +150,28 @@ export default function AnalysisPage() {
   const controlLabel = result?.groups.control_label ?? "control";
   const treatmentLabel = result?.groups.treatment_label ?? "treatment";
 
+  const hasWarnings = diagnostics && diagnostics.warnings.length > 0;
+  const hasSevereWarning = diagnostics?.srm.is_suspected ?? false;
+
   return (
     <main className="min-h-screen bg-slate-50 px-6 py-10 text-slate-900">
       <div className="mx-auto max-w-5xl">
-        <a href="/diagnostics" className="text-sm text-slate-500 hover:text-slate-900">
+        <a
+          href={`/diagnostics?file_id=${encodeURIComponent(
+            fileId
+          )}&treatment_column=${encodeURIComponent(
+            treatmentColumn
+          )}&outcome_column=${encodeURIComponent(
+            outcomeColumn
+          )}&user_id_column=${encodeURIComponent(
+            userIdColumn
+          )}&timestamp_column=${encodeURIComponent(
+            timestampColumn
+          )}&pre_period_column=${encodeURIComponent(
+            prePeriodColumn
+          )}&covariates=${encodeURIComponent(covariateColumns.join(","))}`}
+          className="text-sm text-slate-500 hover:text-slate-900"
+        >
           ← Back to diagnostics
         </a>
 
@@ -110,6 +185,47 @@ export default function AnalysisPage() {
           <p><span className="font-medium">Treatment Column:</span> {treatmentColumn || "Not found"}</p>
           <p><span className="font-medium">Outcome Column:</span> {outcomeColumn || "Not found"}</p>
         </div>
+
+        {diagnostics && (
+          <>
+            {hasSevereWarning ? (
+              <div className="mt-6 rounded-2xl border border-red-200 bg-red-50 p-6 shadow-sm">
+                <h2 className="text-xl font-semibold text-red-800">Interpret with Caution</h2>
+                <p className="mt-2 text-red-700">
+                  This experiment shows analysis results, but diagnostics detected serious issues
+                  such as sample ratio mismatch. Statistical significance alone may not make this
+                  result trustworthy.
+                </p>
+                {diagnostics.warnings.length > 0 && (
+                  <ul className="mt-3 list-disc pl-5 text-red-700">
+                    {diagnostics.warnings.map((warning, index) => (
+                      <li key={index}>{warning}</li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            ) : hasWarnings ? (
+              <div className="mt-6 rounded-2xl border border-yellow-200 bg-yellow-50 p-6 shadow-sm">
+                <h2 className="text-xl font-semibold text-yellow-800">Use Caution</h2>
+                <p className="mt-2 text-yellow-700">
+                  Diagnostics detected some issues that could affect confidence in the result.
+                </p>
+                <ul className="mt-3 list-disc pl-5 text-yellow-700">
+                  {diagnostics.warnings.map((warning, index) => (
+                    <li key={index}>{warning}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : (
+              <div className="mt-6 rounded-2xl border border-emerald-200 bg-emerald-50 p-6 shadow-sm">
+                <h2 className="text-xl font-semibold text-emerald-800">Healthy Experiment Signals</h2>
+                <p className="mt-2 text-emerald-700">
+                  No major diagnostic warnings were detected before analysis.
+                </p>
+              </div>
+            )}
+          </>
+        )}
 
         <div className="mt-6">
           <button
