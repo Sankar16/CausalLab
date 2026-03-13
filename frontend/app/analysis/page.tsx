@@ -2,6 +2,7 @@
 
 import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
+import InfoTooltip from "@/components/InfoTooltip";
 
 type DiagnosticsResponse = {
   treatment_counts: Record<string, number>;
@@ -19,31 +20,31 @@ type DiagnosticsResponse = {
 };
 
 type AnalysisResponse = {
-    metric_type: "binary" | "continuous";
-    outcome_column?: string;
-    groups: {
-      control_label: string;
-      treatment_label: string;
-    };
-    sample_sizes: Record<string, number>;
-    outcome_values?: Record<string, number>;
-    outcome_rates?: Record<string, number>;
-    outcome_means?: Record<string, number>;
-    effect: {
-      absolute_lift: number;
-      relative_lift: number | null;
-    };
-    test_statistic: {
-      test_name: string;
-      stat: number;
-      p_value: number;
-    };
-    confidence_interval_95: {
-      low: number;
-      high: number;
-    };
-    interpretation: string;
+  metric_type: "binary" | "continuous";
+  outcome_column?: string;
+  groups: {
+    control_label: string;
+    treatment_label: string;
   };
+  sample_sizes: Record<string, number>;
+  outcome_values?: Record<string, number>;
+  outcome_rates?: Record<string, number>;
+  outcome_means?: Record<string, number>;
+  effect: {
+    absolute_lift: number;
+    relative_lift: number | null;
+  };
+  test_statistic: {
+    test_name: string;
+    stat: number;
+    p_value: number;
+  };
+  confidence_interval_95: {
+    low: number;
+    high: number;
+  };
+  interpretation: string;
+};
 
 export default function AnalysisPage() {
   const searchParams = useSearchParams();
@@ -184,16 +185,26 @@ export default function AnalysisPage() {
         </p>
 
         <div className="mt-4 rounded-lg bg-slate-100 p-4 text-sm text-slate-700">
-          <p><span className="font-medium">File ID:</span> {fileId || "Not found"}</p>
-          <p><span className="font-medium">Treatment Column:</span> {treatmentColumn || "Not found"}</p>
-          <p><span className="font-medium">Outcome Column:</span> {outcomeColumn || "Not found"}</p>
+          <p>
+            <span className="font-medium">File ID:</span> {fileId || "Not found"}
+          </p>
+          <p>
+            <span className="font-medium">Treatment Column:</span>{" "}
+            {treatmentColumn || "Not found"}
+          </p>
+          <p>
+            <span className="font-medium">Outcome Column:</span>{" "}
+            {outcomeColumn || "Not found"}
+          </p>
         </div>
 
         {diagnostics && (
           <>
             {hasSevereWarning ? (
               <div className="mt-6 rounded-2xl border border-red-200 bg-red-50 p-6 shadow-sm">
-                <h2 className="text-xl font-semibold text-red-800">Interpret with Caution</h2>
+                <h2 className="text-xl font-semibold text-red-800">
+                  Interpret with Caution
+                </h2>
                 <p className="mt-2 text-red-700">
                   This experiment shows analysis results, but diagnostics detected serious issues
                   such as sample ratio mismatch. Statistical significance alone may not make this
@@ -221,7 +232,9 @@ export default function AnalysisPage() {
               </div>
             ) : (
               <div className="mt-6 rounded-2xl border border-emerald-200 bg-emerald-50 p-6 shadow-sm">
-                <h2 className="text-xl font-semibold text-emerald-800">Healthy Experiment Signals</h2>
+                <h2 className="text-xl font-semibold text-emerald-800">
+                  Healthy Experiment Signals
+                </h2>
                 <p className="mt-2 text-emerald-700">
                   No major diagnostic warnings were detected before analysis.
                 </p>
@@ -249,34 +262,41 @@ export default function AnalysisPage() {
         {result && (
           <div className="mt-8 space-y-6">
             <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-                <h2 className="text-xl font-semibold">
-                    {result.metric_type === "binary" ? "Conversion Rates" : "Outcome Means"}
-                </h2>
-                <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                    <div className="rounded-xl bg-slate-100 p-4">
-                    <p className="text-sm text-slate-500">{controlLabel}</p>
-                    <p className="mt-1 text-xl font-semibold">
-                        {result.metric_type === "binary"
-                        ? `${((result.outcome_rates?.[controlLabel] ?? 0) * 100).toFixed(2)}%`
-                        : (result.outcome_means?.[controlLabel] ?? 0).toFixed(2)}
-                    </p>
-                    </div>
-                    <div className="rounded-xl bg-slate-100 p-4">
-                    <p className="text-sm text-slate-500">{treatmentLabel}</p>
-                    <p className="mt-1 text-xl font-semibold">
-                        {result.metric_type === "binary"
-                        ? `${((result.outcome_rates?.[treatmentLabel] ?? 0) * 100).toFixed(2)}%`
-                        : (result.outcome_means?.[treatmentLabel] ?? 0).toFixed(2)}
-                    </p>
-                    </div>
+              <h2 className="flex items-center text-xl font-semibold">
+                {result.metric_type === "binary" ? "Conversion Rates" : "Outcome Means"}
+                <InfoTooltip text="Shows the raw average outcome for control and treatment. For binary metrics this is a rate, and for numeric metrics this is a mean." />
+              </h2>
+              <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                <div className="rounded-xl bg-slate-100 p-4">
+                  <p className="text-sm text-slate-500">{controlLabel}</p>
+                  <p className="mt-1 text-xl font-semibold">
+                    {result.metric_type === "binary"
+                      ? `${((result.outcome_rates?.[controlLabel] ?? 0) * 100).toFixed(2)}%`
+                      : (result.outcome_means?.[controlLabel] ?? 0).toFixed(2)}
+                  </p>
                 </div>
+                <div className="rounded-xl bg-slate-100 p-4">
+                  <p className="text-sm text-slate-500">{treatmentLabel}</p>
+                  <p className="mt-1 text-xl font-semibold">
+                    {result.metric_type === "binary"
+                      ? `${((result.outcome_rates?.[treatmentLabel] ?? 0) * 100).toFixed(2)}%`
+                      : (result.outcome_means?.[treatmentLabel] ?? 0).toFixed(2)}
+                  </p>
+                </div>
+              </div>
             </div>
 
             <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-              <h2 className="text-xl font-semibold">Effect Size</h2>
+              <h2 className="flex items-center text-xl font-semibold">
+                Effect Size
+                <InfoTooltip text="Summarizes how much treatment changed the outcome compared with control." />
+              </h2>
               <div className="mt-4 grid gap-4 sm:grid-cols-2">
                 <div className="rounded-xl bg-slate-100 p-4">
-                  <p className="text-sm text-slate-500">Absolute Lift</p>
+                  <p className="flex items-center text-sm text-slate-500">
+                    Absolute Lift
+                    <InfoTooltip text="The direct difference between treatment and control performance." />
+                  </p>
                   <p className="mt-1 text-xl font-semibold">
                     {result.metric_type === "binary"
                       ? `${(result.effect.absolute_lift * 100).toFixed(2)} pp`
@@ -284,7 +304,10 @@ export default function AnalysisPage() {
                   </p>
                 </div>
                 <div className="rounded-xl bg-slate-100 p-4">
-                  <p className="text-sm text-slate-500">Relative Lift</p>
+                  <p className="flex items-center text-sm text-slate-500">
+                    Relative Lift
+                    <InfoTooltip text="The percentage improvement of treatment relative to control." />
+                  </p>
                   <p className="mt-1 text-xl font-semibold">
                     {result.effect.relative_lift !== null
                       ? `${(result.effect.relative_lift * 100).toFixed(2)}%`
@@ -295,21 +318,35 @@ export default function AnalysisPage() {
             </div>
 
             <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-              <h2 className="text-xl font-semibold">Statistical Test</h2>
+              <h2 className="flex items-center text-xl font-semibold">
+                Statistical Test
+                <InfoTooltip text="Shows the statistical evidence for whether the observed treatment effect is likely to be real rather than random noise." />
+              </h2>
               <div className="mt-4 grid gap-4 sm:grid-cols-3">
                 <div className="rounded-xl bg-slate-100 p-4">
-                  <p className="text-sm text-slate-500">Test Statistic</p>
+                  <p className="flex items-center text-sm text-slate-500">
+                    Test Statistic
+                    <InfoTooltip text="A standardized number produced by the test. Larger magnitudes generally indicate stronger evidence against no effect." />
+                  </p>
                   <p className="mt-1 font-semibold">{result.test_statistic.stat}</p>
                 </div>
                 <div className="rounded-xl bg-slate-100 p-4">
-                  <p className="text-sm text-slate-500">P-value</p>
+                  <p className="flex items-center text-sm text-slate-500">
+                    P-value
+                    <InfoTooltip text="Measures how surprising the observed difference would be if there were truly no treatment effect." />
+                  </p>
                   <p className="mt-1 font-semibold">{result.test_statistic.p_value}</p>
                 </div>
                 <div className="rounded-xl bg-slate-100 p-4">
-                  <p className="text-sm text-slate-500">Significance</p>
+                  <p className="flex items-center text-sm text-slate-500">
+                    Significance
+                    <InfoTooltip text="A quick interpretation of the p-value using a common threshold like 0.05." />
+                  </p>
                   <p
                     className={`mt-1 font-semibold ${
-                      result.test_statistic.p_value < 0.05 ? "text-emerald-700" : "text-red-700"
+                      result.test_statistic.p_value < 0.05
+                        ? "text-emerald-700"
+                        : "text-red-700"
                     }`}
                   >
                     {result.test_statistic.p_value < 0.05
@@ -321,16 +358,19 @@ export default function AnalysisPage() {
             </div>
 
             <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-              <h2 className="text-xl font-semibold">95% Confidence Interval</h2>
-                <p className="mt-4 text-lg font-semibold">
+              <h2 className="flex items-center text-xl font-semibold">
+                95% Confidence Interval
+                <InfoTooltip text="A range of plausible values for the true treatment effect. Narrower intervals indicate more precision." />
+              </h2>
+              <p className="mt-4 text-lg font-semibold">
                 {result.metric_type === "binary"
-                    ? `[${(result.confidence_interval_95.low * 100).toFixed(2)}, ${(
-                        result.confidence_interval_95.high * 100
+                  ? `[${(result.confidence_interval_95.low * 100).toFixed(2)}, ${(
+                      result.confidence_interval_95.high * 100
                     ).toFixed(2)}] percentage points`
-                    : `[${result.confidence_interval_95.low.toFixed(2)}, ${result.confidence_interval_95.high.toFixed(
-                        2
+                  : `[${result.confidence_interval_95.low.toFixed(2)}, ${result.confidence_interval_95.high.toFixed(
+                      2
                     )}]`}
-                </p>
+              </p>
             </div>
 
             <div className="rounded-2xl border border-blue-200 bg-blue-50 p-6 shadow-sm">
