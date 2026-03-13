@@ -1,7 +1,7 @@
 "use client";
 
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
 import InfoTooltip from "@/components/InfoTooltip";
 import { API_BASE_URL } from "@/lib/api";
 
@@ -47,7 +47,7 @@ type AnalysisResponse = {
   interpretation: string;
 };
 
-export default function AnalysisPage() {
+function AnalysisPageContent() {
   const searchParams = useSearchParams();
 
   const fileId = searchParams.get("file_id") || "";
@@ -408,3 +408,19 @@ export default function AnalysisPage() {
     </main>
   );
 }
+
+export default function AnalysisPage() {
+    return (
+      <Suspense
+        fallback={
+          <main className="min-h-screen bg-slate-50 px-6 py-10 text-slate-900">
+            <div className="mx-auto max-w-5xl rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
+              Loading analysis page...
+            </div>
+          </main>
+        }
+      >
+        <AnalysisPageContent />
+      </Suspense>
+    );
+  }

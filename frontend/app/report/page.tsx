@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { API_BASE_URL } from "@/lib/api";
 
@@ -52,7 +52,7 @@ type LLMSummaryResponse = {
   recommendation: string;
 };
 
-export default function ReportPage() {
+function ReportPageContent() {
   const searchParams = useSearchParams();
 
   const fileId = searchParams.get("file_id") || "";
@@ -468,3 +468,19 @@ export default function ReportPage() {
     </main>
   );
 }
+
+export default function ReportPage() {
+    return (
+      <Suspense
+        fallback={
+          <main className="min-h-screen bg-slate-50 px-6 py-10 text-slate-900">
+            <div className="mx-auto max-w-4xl rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
+              Loading report...
+            </div>
+          </main>
+        }
+      >
+        <ReportPageContent />
+      </Suspense>
+    );
+  }
