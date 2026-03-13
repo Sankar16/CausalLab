@@ -316,6 +316,29 @@ export default function MapColumnsPage() {
                 </ul>
               </div>
             )}
+
+            {result.valid && result.summary && (
+              <div className="mt-6">
+                <a
+                  href={`/diagnostics?file_id=${encodeURIComponent(
+                    fileId
+                  )}&treatment_column=${encodeURIComponent(
+                    treatmentColumn
+                  )}&outcome_column=${encodeURIComponent(
+                    outcomeColumn
+                  )}&user_id_column=${encodeURIComponent(
+                    userIdColumn
+                  )}&timestamp_column=${encodeURIComponent(
+                    timestampColumn
+                  )}&pre_period_column=${encodeURIComponent(
+                    prePeriodColumn
+                  )}&covariates=${encodeURIComponent(covariateColumns.join(","))}`}
+                  className="inline-block rounded-xl bg-emerald-700 px-5 py-3 text-white transition hover:bg-emerald-600"
+                >
+                  Continue to Diagnostics
+                </a>
+              </div>
+            )}
           </div>
         )}
       </div>
