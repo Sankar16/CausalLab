@@ -112,6 +112,21 @@ export default function UploadPage() {
 
         {result && (
           <div className="mt-8 space-y-6">
+            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-6 shadow-sm">
+              <h2 className="text-xl font-semibold text-emerald-800">
+                Upload Successful
+              </h2>
+              <p className="mt-2 text-emerald-700">
+                Your dataset has been uploaded and profiled successfully.
+              </p>
+              <a
+                href={`/map-columns?file_id=${result.file_id}`}
+                className="mt-4 inline-block rounded-xl bg-emerald-700 px-5 py-3 text-white transition hover:bg-emerald-600"
+              >
+                Continue to Column Mapping
+              </a>
+            </div>
+
             <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
               <h2 className="text-xl font-semibold">Upload Summary</h2>
               <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
