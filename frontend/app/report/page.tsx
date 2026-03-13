@@ -45,6 +45,12 @@ type AnalysisResponse = {
   interpretation: string;
 };
 
+type LLMSummaryResponse = {
+  executive_summary: string;
+  reliability_note: string;
+  recommendation: string;
+};
+
 export default function ReportPage() {
   const searchParams = useSearchParams();
 
@@ -69,6 +75,10 @@ export default function ReportPage() {
   const [analysis, setAnalysis] = useState<AnalysisResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
+  const [llmSummary, setLlmSummary] = useState<LLMSummaryResponse | null>(null);
+  const [summaryLoading, setSummaryLoading] = useState(false);
+  const [summaryError, setSummaryError] = useState("");
 
   useEffect(() => {
     const loadReportData = async () => {
@@ -145,6 +155,50 @@ export default function ReportPage() {
     window.print();
   };
 
+  const handleGenerateSummary = async () => {
+    if (!diagnostics || !analysis) return;
+
+    try {
+      setSummaryLoading(true);
+      setSummaryError("");
+      setLlmSummary(null);
+
+      const response = await fetch("http://127.0.0.1:8000/llm-summary", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          metadata: {
+            file_id: fileId,
+            treatment_column: treatmentColumn,
+            outcome_column: outcomeColumn,
+            user_id_column: userIdColumn || null,
+            timestamp_column: timestampColumn || null,
+            pre_period_column: prePeriodColumn || null,
+            covariates: covariateColumns,
+          },
+          diagnostics,
+          analysis,
+        }),
+      });
+
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.detail || "Failed to generate executive summary.");
+      }
+
+      const data: LLMSummaryResponse = await response.json();
+      setLlmSummary(data);
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Failed to generate executive summary.";
+      setSummaryError(message);
+    } finally {
+      setSummaryLoading(false);
+    }
+  };
+
   const hasWarnings = diagnostics && diagnostics.warnings.length > 0;
   const hasSevereWarning = diagnostics?.srm.is_suspected ?? false;
 
@@ -207,6 +261,44 @@ export default function ReportPage() {
 
           {!loading && !error && diagnostics && analysis && (
             <div className="mt-8 space-y-8">
+              <section>
+                <div className="flex flex-wrap items-center gap-3">
+                  <h2 className="text-xl font-semibold">Executive Summary</h2>
+                  <button
+                    onClick={handleGenerateSummary}
+                    disabled={summaryLoading}
+                    className="rounded-xl bg-slate-900 px-4 py-2 text-sm text-white hover:bg-slate-700 disabled:opacity-60 print:hidden"
+                  >
+                    {summaryLoading ? "Generating..." : "Generate Executive Summary"}
+                  </button>
+                </div>
+
+                {summaryError && (
+                  <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-4 text-red-700">
+                    {summaryError}
+                  </div>
+                )}
+
+                {llmSummary && (
+                  <div className="mt-4 space-y-4">
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                      <p className="text-sm font-semibold text-slate-500">Executive Summary</p>
+                      <p className="mt-2 text-slate-800">{llmSummary.executive_summary}</p>
+                    </div>
+
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                      <p className="text-sm font-semibold text-slate-500">Reliability Note</p>
+                      <p className="mt-2 text-slate-800">{llmSummary.reliability_note}</p>
+                    </div>
+
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                      <p className="text-sm font-semibold text-slate-500">Recommendation</p>
+                      <p className="mt-2 text-slate-800">{llmSummary.recommendation}</p>
+                    </div>
+                  </div>
+                )}
+              </section>
+
               <section>
                 <h2 className="text-xl font-semibold">Experiment Setup</h2>
                 <div className="mt-4 grid gap-4 sm:grid-cols-2">
