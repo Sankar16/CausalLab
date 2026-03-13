@@ -1,7 +1,7 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import InfoTooltip from "@/components/InfoTooltip";
 
 type DiagnosticsResponse = {
@@ -57,10 +57,14 @@ export default function AnalysisPage() {
   const prePeriodColumn = searchParams.get("pre_period_column") || "";
   const covariatesParam = searchParams.get("covariates") || "";
 
-  const covariateColumns = covariatesParam
-    .split(",")
-    .map((item) => item.trim())
-    .filter(Boolean);
+  const covariateColumns = useMemo(
+    () =>
+      covariatesParam
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean),
+    [covariatesParam]
+  );
 
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<AnalysisResponse | null>(null);
@@ -376,6 +380,26 @@ export default function AnalysisPage() {
             <div className="rounded-2xl border border-blue-200 bg-blue-50 p-6 shadow-sm">
               <h2 className="text-xl font-semibold text-blue-900">Interpretation</h2>
               <p className="mt-3 text-blue-900">{result.interpretation}</p>
+            </div>
+            <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                <a
+                    href={`/report?file_id=${encodeURIComponent(
+                    fileId
+                    )}&treatment_column=${encodeURIComponent(
+                    treatmentColumn
+                    )}&outcome_column=${encodeURIComponent(
+                    outcomeColumn
+                    )}&user_id_column=${encodeURIComponent(
+                    userIdColumn
+                    )}&timestamp_column=${encodeURIComponent(
+                    timestampColumn
+                    )}&pre_period_column=${encodeURIComponent(
+                    prePeriodColumn
+                    )}&covariates=${encodeURIComponent(covariateColumns.join(","))}`}
+                    className="inline-block rounded-xl bg-emerald-700 px-5 py-3 text-white transition hover:bg-emerald-600"
+                >
+                    Open Report
+                </a>
             </div>
           </div>
         )}
