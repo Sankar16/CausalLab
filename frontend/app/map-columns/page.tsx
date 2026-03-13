@@ -191,6 +191,7 @@ function MapColumnsPageContent() {
           timestamp_column: timestampColumn || null,
           covariate_columns: covariateColumns,
           pre_period_column: prePeriodColumn || null,
+          expected_proportions: null,
         }),
       });
 
@@ -463,28 +464,61 @@ function MapColumnsPageContent() {
                 </ul>
               </div>
             )}
+          </div>
+        )}
 
-            {result.valid && result.summary && (
-              <div className="mt-6">
-                <a
-                  href={`/data-readiness?file_id=${encodeURIComponent(
-                    fileId
-                  )}&treatment_column=${encodeURIComponent(
-                    treatmentColumn
-                  )}&outcome_column=${encodeURIComponent(
-                    outcomeColumn
-                  )}&user_id_column=${encodeURIComponent(
-                    userIdColumn
-                  )}&timestamp_column=${encodeURIComponent(
-                    timestampColumn
-                  )}&pre_period_column=${encodeURIComponent(
-                    prePeriodColumn
-                  )}&covariates=${encodeURIComponent(covariateColumns.join(","))}`}
-                  className="inline-block rounded-xl bg-emerald-700 px-5 py-3 text-white transition hover:bg-emerald-600"
-                >
-                  Continue to Data Readiness Check
-                </a>
+        {(treatmentColumn || outcomeColumn) && (
+          <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            <h2 className="text-xl font-semibold">Next Step</h2>
+
+            {!treatmentColumn || !outcomeColumn ? (
+              <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-4 text-red-700">
+                Select both a treatment column and an outcome column before continuing to Data
+                Readiness.
               </div>
+            ) : (
+              <>
+                {result && !result.valid && (
+                  <div className="mt-4 rounded-lg border border-yellow-200 bg-yellow-50 p-4 text-yellow-800">
+                    Mapping validation found issues, but you can continue to Data Readiness to
+                    review structural problems and potential fixes before diagnostics.
+                  </div>
+                )}
+
+                {!result && (
+                  <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-4 text-slate-700">
+                    You can continue to Data Readiness now, or validate this mapping first for
+                    additional feedback.
+                  </div>
+                )}
+
+                <div className="mt-4">
+                  <a
+                    href={`/data-readiness?file_id=${encodeURIComponent(
+                      fileId
+                    )}&treatment_column=${encodeURIComponent(
+                      treatmentColumn
+                    )}&outcome_column=${encodeURIComponent(
+                      outcomeColumn
+                    )}&user_id_column=${encodeURIComponent(
+                      userIdColumn
+                    )}&timestamp_column=${encodeURIComponent(
+                      timestampColumn
+                    )}&pre_period_column=${encodeURIComponent(
+                      prePeriodColumn
+                    )}&covariates=${encodeURIComponent(covariateColumns.join(","))}`}
+                    className={`inline-block rounded-xl px-5 py-3 text-white transition ${
+                      result?.valid
+                        ? "bg-emerald-700 hover:bg-emerald-600"
+                        : "bg-amber-600 hover:bg-amber-500"
+                    }`}
+                  >
+                    {result?.valid
+                      ? "Continue to Data Readiness"
+                      : "Continue to Data Readiness to Review Issues"}
+                  </a>
+                </div>
+              </>
             )}
           </div>
         )}

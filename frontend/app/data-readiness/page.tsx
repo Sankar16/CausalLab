@@ -23,6 +23,14 @@ type DataReadinessResponse = {
   readiness_status: "ready" | "needs_review" | "not_ready";
 };
 
+type ApplyFixesResponse = {
+  original_file_id: string;
+  new_file_id: string;
+  applied_fixes: string[];
+  change_summary: Record<string, number>;
+  row_count_after_fixes: number;
+};
+
 function DataReadinessPageContent() {
   const searchParams = useSearchParams();
 
@@ -39,12 +47,51 @@ function DataReadinessPageContent() {
     .map((item) => item.trim())
     .filter(Boolean);
 
+  const [currentFileId, setCurrentFileId] = useState(fileId);
   const [loading, setLoading] = useState(false);
+  const [fixLoading, setFixLoading] = useState(false);
   const [result, setResult] = useState<DataReadinessResponse | null>(null);
+  const [fixResult, setFixResult] = useState<ApplyFixesResponse | null>(null);
   const [error, setError] = useState("");
 
+  const [selectedFixes, setSelectedFixes] = useState({
+    normalize_empty_strings: true,
+    standardize_treatment_labels: true,
+    coerce_binary_outcome: true,
+    drop_duplicate_rows: true,
+    drop_missing_treatment_rows: true,
+    drop_missing_outcome_rows: true,
+  });
+
+  const runReadinessCheck = async (targetFileId: string) => {
+    const response = await fetch(`${API_BASE_URL}/data-readiness`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        file_id: targetFileId,
+        treatment_column: treatmentColumn,
+        outcome_column: outcomeColumn,
+        user_id_column: userIdColumn || null,
+        timestamp_column: timestampColumn || null,
+        covariate_columns: covariateColumns,
+        pre_period_column: prePeriodColumn || null,
+        expected_proportions: null,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.detail || "Data readiness check failed.");
+    }
+
+    const data: DataReadinessResponse = await response.json();
+    setResult(data);
+  };
+
   const handleRunReadinessCheck = async () => {
-    if (!fileId || !treatmentColumn || !outcomeColumn) {
+    if (!currentFileId || !treatmentColumn || !outcomeColumn) {
       setError("Missing required parameters in URL.");
       return;
     }
@@ -52,38 +99,61 @@ function DataReadinessPageContent() {
     try {
       setLoading(true);
       setError("");
-      setResult(null);
-
-      const response = await fetch(`${API_BASE_URL}/data-readiness`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          file_id: fileId,
-          treatment_column: treatmentColumn,
-          outcome_column: outcomeColumn,
-          user_id_column: userIdColumn || null,
-          timestamp_column: timestampColumn || null,
-          covariate_columns: covariateColumns,
-          pre_period_column: prePeriodColumn || null,
-          expected_proportions: null,
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || "Data readiness check failed.");
-      }
-
-      const data: DataReadinessResponse = await response.json();
-      setResult(data);
+      setFixResult(null);
+      await runReadinessCheck(currentFileId);
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Something went wrong during data readiness check.";
       setError(message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleApplyFixes = async () => {
+    if (!currentFileId || !treatmentColumn || !outcomeColumn) {
+      setError("Missing required parameters in URL.");
+      return;
+    }
+
+    try {
+      setFixLoading(true);
+      setError("");
+      setFixResult(null);
+
+      const response = await fetch(`${API_BASE_URL}/apply-fixes`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          file_id: currentFileId,
+          treatment_column: treatmentColumn,
+          outcome_column: outcomeColumn,
+          user_id_column: userIdColumn || null,
+          timestamp_column: timestampColumn || null,
+          covariate_columns: covariateColumns,
+          pre_period_column: prePeriodColumn || null,
+          fixes: selectedFixes,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || "Applying fixes failed.");
+      }
+
+      const data: ApplyFixesResponse = await response.json();
+      setFixResult(data);
+      setCurrentFileId(data.new_file_id);
+
+      await runReadinessCheck(data.new_file_id);
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Something went wrong while applying fixes.";
+      setError(message);
+    } finally {
+      setFixLoading(false);
     }
   };
 
@@ -123,21 +193,19 @@ function DataReadinessPageContent() {
   };
 
   const checkStatusClasses = (status: "pass" | "warning" | "critical") => {
-    if (status === "pass") {
-      return "border-emerald-200 bg-emerald-50 text-emerald-800";
-    }
-    if (status === "warning") {
-      return "border-yellow-200 bg-yellow-50 text-yellow-800";
-    }
+    if (status === "pass") return "border-emerald-200 bg-emerald-50 text-emerald-800";
+    if (status === "warning") return "border-yellow-200 bg-yellow-50 text-yellow-800";
     return "border-red-200 bg-red-50 text-red-800";
   };
+
+  const canContinueToDiagnostics = result && result.readiness_status !== "not_ready";
 
   return (
     <main className="min-h-screen bg-slate-50 px-6 py-10 text-slate-900">
       <div className="mx-auto max-w-5xl">
         <a
           href={`/map-columns?file_id=${encodeURIComponent(
-            fileId
+            currentFileId
           )}&treatment_column=${encodeURIComponent(
             treatmentColumn
           )}&outcome_column=${encodeURIComponent(
@@ -161,7 +229,7 @@ function DataReadinessPageContent() {
 
         <div className="mt-4 rounded-lg bg-slate-100 p-4 text-sm text-slate-700">
           <p>
-            <span className="font-medium">File ID:</span> {fileId || "Not found"}
+            <span className="font-medium">Current File ID:</span> {currentFileId || "Not found"}
           </p>
           <p>
             <span className="font-medium">Treatment Column:</span>{" "}
@@ -192,6 +260,23 @@ function DataReadinessPageContent() {
           <div className="mt-8 space-y-6">
             {readinessBadge()}
 
+            {fixResult && (
+              <div className="rounded-2xl border border-blue-200 bg-blue-50 p-6 shadow-sm">
+                <h2 className="text-xl font-semibold text-blue-900">Fixes Applied</h2>
+                <p className="mt-2 text-blue-800">
+                  A cleaned dataset version was created and Data Readiness was rerun automatically.
+                </p>
+                <p className="mt-3 text-sm text-blue-800">
+                  <span className="font-medium">New File ID:</span> {fixResult.new_file_id}
+                </p>
+                <ul className="mt-3 list-disc pl-5 text-blue-800">
+                  {fixResult.applied_fixes.map((fix, idx) => (
+                    <li key={idx}>{fix}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
             <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
               <div className="flex items-center gap-2">
                 <h2 className="text-xl font-semibold">Summary</h2>
@@ -209,9 +294,7 @@ function DataReadinessPageContent() {
                 </div>
                 <div className="rounded-xl bg-slate-100 p-4">
                   <p className="text-sm text-slate-500">Missing Treatment Rows</p>
-                  <p className="mt-1 font-semibold">
-                    {result.summary.missing_treatment_rows}
-                  </p>
+                  <p className="mt-1 font-semibold">{result.summary.missing_treatment_rows}</p>
                 </div>
                 <div className="rounded-xl bg-slate-100 p-4">
                   <p className="text-sm text-slate-500">Missing Outcome Rows</p>
@@ -219,15 +302,11 @@ function DataReadinessPageContent() {
                 </div>
                 <div className="rounded-xl bg-slate-100 p-4">
                   <p className="text-sm text-slate-500">Treatment Group Count</p>
-                  <p className="mt-1 font-semibold">
-                    {result.summary.treatment_group_count}
-                  </p>
+                  <p className="mt-1 font-semibold">{result.summary.treatment_group_count}</p>
                 </div>
                 <div className="rounded-xl bg-slate-100 p-4">
                   <p className="text-sm text-slate-500">Detected Outcome Type</p>
-                  <p className="mt-1 font-semibold">
-                    {result.summary.outcome_detected_type}
-                  </p>
+                  <p className="mt-1 font-semibold">{result.summary.outcome_detected_type}</p>
                 </div>
               </div>
             </div>
@@ -274,24 +353,68 @@ function DataReadinessPageContent() {
             </div>
 
             <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-              <a
-                href={`/diagnostics?file_id=${encodeURIComponent(
-                  fileId
-                )}&treatment_column=${encodeURIComponent(
-                  treatmentColumn
-                )}&outcome_column=${encodeURIComponent(
-                  outcomeColumn
-                )}&user_id_column=${encodeURIComponent(
-                  userIdColumn
-                )}&timestamp_column=${encodeURIComponent(
-                  timestampColumn
-                )}&pre_period_column=${encodeURIComponent(
-                  prePeriodColumn
-                )}&covariates=${encodeURIComponent(covariateColumns.join(","))}`}
-                className="inline-block rounded-xl bg-emerald-700 px-5 py-3 text-white transition hover:bg-emerald-600"
+              <h2 className="text-xl font-semibold">Apply Safe Fixes</h2>
+              <p className="mt-2 text-slate-600">
+                These fixes address common structural issues safely. After applying them,
+                CausalLab will automatically rerun the readiness checks on a cleaned copy.
+              </p>
+
+              <div className="mt-4 space-y-3">
+                {Object.entries(selectedFixes).map(([key, value]) => (
+                  <label
+                    key={key}
+                    className="flex items-center gap-3 rounded-lg border border-slate-200 p-3"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={value}
+                      onChange={() =>
+                        setSelectedFixes((prev) => ({
+                          ...prev,
+                          [key]: !prev[key as keyof typeof prev],
+                        }))
+                      }
+                    />
+                    <span className="text-sm text-slate-700">{key}</span>
+                  </label>
+                ))}
+              </div>
+
+              <button
+                onClick={handleApplyFixes}
+                disabled={fixLoading}
+                className="mt-4 rounded-xl bg-blue-700 px-5 py-3 text-white transition hover:bg-blue-600 disabled:opacity-60"
               >
-                Continue to Diagnostics
-              </a>
+                {fixLoading ? "Applying Fixes..." : "Apply Selected Fixes"}
+              </button>
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+              {canContinueToDiagnostics ? (
+                <a
+                  href={`/diagnostics?file_id=${encodeURIComponent(
+                    currentFileId
+                  )}&treatment_column=${encodeURIComponent(
+                    treatmentColumn
+                  )}&outcome_column=${encodeURIComponent(
+                    outcomeColumn
+                  )}&user_id_column=${encodeURIComponent(
+                    userIdColumn
+                  )}&timestamp_column=${encodeURIComponent(
+                    timestampColumn
+                  )}&pre_period_column=${encodeURIComponent(
+                    prePeriodColumn
+                  )}&covariates=${encodeURIComponent(covariateColumns.join(","))}`}
+                  className="inline-block rounded-xl bg-emerald-700 px-5 py-3 text-white transition hover:bg-emerald-600"
+                >
+                  Continue to Diagnostics
+                </a>
+              ) : (
+                <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-700">
+                  This dataset is still not ready for diagnostics. Apply fixes or revise your
+                  mapping before continuing.
+                </div>
+              )}
             </div>
           </div>
         )}
