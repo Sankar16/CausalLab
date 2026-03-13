@@ -1,7 +1,7 @@
 "use client";
 
+import { Suspense, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Suspense, useState } from "react";
 import InfoTooltip from "@/components/InfoTooltip";
 import { API_BASE_URL } from "@/lib/api";
 
@@ -11,6 +11,7 @@ type DiagnosticsResponse = {
     chi_square_stat: number;
     p_value: number;
     is_suspected: boolean;
+    expected_proportions?: Record<string, number>;
   };
   missing_outcome_by_group: Record<string, number>;
   outcome_summary: {
@@ -40,6 +41,32 @@ function DiagnosticsPageContent() {
   const [result, setResult] = useState<DiagnosticsResponse | null>(null);
   const [error, setError] = useState("");
 
+  const [expectedMode, setExpectedMode] = useState<"equal" | "custom">("equal");
+  const [expectedGroup1, setExpectedGroup1] = useState("50");
+
+  const treatmentGroups = result ? Object.keys(result.treatment_counts) : [];
+  const outcomeGroups = result ? Object.keys(result.outcome_summary.by_group) : [];
+  const missingGroups = result ? Object.keys(result.missing_outcome_by_group) : [];
+
+  const expectedGroup2 = useMemo(() => {
+    const firstValue = Number(expectedGroup1);
+    if (!Number.isFinite(firstValue)) return "";
+    return String(100 - firstValue);
+  }, [expectedGroup1]);
+
+  const handleUseObservedSplit = () => {
+    if (!result || treatmentGroups.length !== 2) return;
+
+    const total = Object.values(result.treatment_counts).reduce((sum, value) => sum + value, 0);
+    if (total === 0) return;
+
+    const group1Observed = result.treatment_counts[treatmentGroups[0]];
+    const group1Percent = ((group1Observed / total) * 100).toFixed(1);
+
+    setExpectedMode("custom");
+    setExpectedGroup1(group1Percent);
+  };
+
   const handleRunDiagnostics = async () => {
     if (!fileId || !treatmentColumn || !outcomeColumn) {
       setError("Missing required parameters in URL.");
@@ -50,6 +77,38 @@ function DiagnosticsPageContent() {
       setLoading(true);
       setError("");
       setResult(null);
+
+      let expectedProportions: Record<string, number> | null = null;
+
+      if (expectedMode === "custom") {
+        const firstValue = Number(expectedGroup1);
+        const secondValue = 100 - firstValue;
+
+        if (!Number.isFinite(firstValue)) {
+          setError("Custom expected split value must be a valid number.");
+          setLoading(false);
+          return;
+        }
+
+        if (firstValue < 0 || firstValue > 100) {
+          setError("Group 1 expected percentage must be between 0 and 100.");
+          setLoading(false);
+          return;
+        }
+
+        if (treatmentGroups.length !== 2) {
+          setError(
+            "Run diagnostics once first so CausalLab can detect the treatment groups for custom split."
+          );
+          setLoading(false);
+          return;
+        }
+
+        expectedProportions = {
+          [treatmentGroups[0]]: firstValue / 100,
+          [treatmentGroups[1]]: secondValue / 100,
+        };
+      }
 
       const response = await fetch(`${API_BASE_URL}/diagnostics`, {
         method: "POST",
@@ -64,6 +123,7 @@ function DiagnosticsPageContent() {
           timestamp_column: timestampColumn || null,
           covariate_columns: covariateColumns,
           pre_period_column: prePeriodColumn || null,
+          expected_proportions: expectedProportions,
         }),
       });
 
@@ -82,10 +142,6 @@ function DiagnosticsPageContent() {
       setLoading(false);
     }
   };
-
-  const treatmentGroups = result ? Object.keys(result.treatment_counts) : [];
-  const outcomeGroups = result ? Object.keys(result.outcome_summary.by_group) : [];
-  const missingGroups = result ? Object.keys(result.missing_outcome_by_group) : [];
 
   return (
     <main className="min-h-screen bg-slate-50 px-6 py-10 text-slate-900">
@@ -111,8 +167,8 @@ function DiagnosticsPageContent() {
 
         <h1 className="mt-4 text-3xl font-bold">Experiment Diagnostics</h1>
         <p className="mt-2 text-slate-600">
-          Review treatment balance, sample ratio mismatch, missing outcomes, and
-          raw outcome summaries before running final analysis.
+          Review treatment balance, sample ratio mismatch, missing outcomes, and raw outcome
+          summaries before running final analysis.
         </p>
 
         <div className="mt-4 rounded-lg bg-slate-100 p-4 text-sm text-slate-700">
@@ -124,9 +180,89 @@ function DiagnosticsPageContent() {
             {treatmentColumn || "Not found"}
           </p>
           <p>
-            <span className="font-medium">Outcome Column:</span>{" "}
-            {outcomeColumn || "Not found"}
+            <span className="font-medium">Outcome Column:</span> {outcomeColumn || "Not found"}
           </p>
+        </div>
+
+        <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="flex items-center gap-2">
+            <h2 className="text-xl font-semibold">Expected Allocation for SRM</h2>
+            <InfoTooltip text="SRM compares observed treatment counts against the intended allocation. Use equal split for standard 50/50 experiments, or set a custom split for uneven traffic allocation." />
+          </div>
+
+          <p className="mt-2 text-slate-600">
+            Define the intended group split used for Sample Ratio Mismatch detection.
+          </p>
+
+          <div className="mt-4 flex flex-wrap gap-4">
+            <label className="flex items-center gap-2">
+              <input
+                type="radio"
+                name="expectedMode"
+                checked={expectedMode === "equal"}
+                onChange={() => setExpectedMode("equal")}
+              />
+              <span>Equal split</span>
+            </label>
+
+            <label className="flex items-center gap-2">
+              <input
+                type="radio"
+                name="expectedMode"
+                checked={expectedMode === "custom"}
+                onChange={() => setExpectedMode("custom")}
+              />
+              <span>Custom split</span>
+            </label>
+          </div>
+
+          {expectedMode === "custom" && (
+            <div className="mt-4 space-y-4">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label className="mb-2 block text-sm font-medium">Group 1 Expected %</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="0.1"
+                    value={expectedGroup1}
+                    onChange={(e) => setExpectedGroup1(e.target.value)}
+                    className="w-full rounded-lg border border-slate-300 p-3"
+                  />
+                  {treatmentGroups.length > 0 && (
+                    <p className="mt-2 text-sm text-slate-500">Group 1: {treatmentGroups[0]}</p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-sm font-medium">Group 2 Expected %</label>
+                  <input
+                    type="number"
+                    value={expectedGroup2}
+                    readOnly
+                    className="w-full rounded-lg border border-slate-200 bg-slate-100 p-3 text-slate-600"
+                  />
+                  {treatmentGroups.length > 1 && (
+                    <p className="mt-2 text-sm text-slate-500">Group 2: {treatmentGroups[1]}</p>
+                  )}
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleUseObservedSplit}
+                disabled={!result || treatmentGroups.length !== 2}
+                className="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Use observed split
+              </button>
+
+              <p className="text-sm text-slate-500">
+                Group 2 is automatically calculated as 100 - Group 1.
+              </p>
+            </div>
+          )}
         </div>
 
         <div className="mt-6">
@@ -148,10 +284,10 @@ function DiagnosticsPageContent() {
         {result && (
           <div className="mt-8 space-y-6">
             <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-              <h2 className="flex items-center text-xl font-semibold">
-                Treatment Counts
-                <InfoTooltip text="Shows how many rows belong to each treatment group. Large imbalances may indicate an experiment setup or logging issue." />
-              </h2>
+              <div className="flex items-center gap-2">
+                <h2 className="text-xl font-semibold">Treatment Counts</h2>
+                <InfoTooltip text="Observed row counts for each experiment group." />
+              </div>
               <div className="mt-4 grid gap-4 sm:grid-cols-2">
                 {treatmentGroups.map((group) => (
                   <div key={group} className="rounded-xl bg-slate-100 p-4">
@@ -165,23 +301,18 @@ function DiagnosticsPageContent() {
             </div>
 
             <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-              <h2 className="flex items-center text-xl font-semibold">
-                Sample Ratio Mismatch
-                <InfoTooltip text="Checks whether treatment and control group sizes differ more than expected from the intended split, such as 50/50." />
-              </h2>
-              <div className="mt-4 grid gap-4 sm:grid-cols-3">
+              <div className="flex items-center gap-2">
+                <h2 className="text-xl font-semibold">Sample Ratio Mismatch</h2>
+                <InfoTooltip text="SRM checks whether the observed treatment split differs more than expected from the intended allocation." />
+              </div>
+
+              <div className="mt-4 grid gap-4 sm:grid-cols-4">
                 <div className="rounded-xl bg-slate-100 p-4">
-                  <p className="flex items-center text-sm text-slate-500">
-                    Chi-square Statistic
-                    <InfoTooltip text="A test statistic used to measure how different the observed group counts are from the expected counts." />
-                  </p>
+                  <p className="text-sm text-slate-500">Chi-square Statistic</p>
                   <p className="mt-1 font-semibold">{result.srm.chi_square_stat}</p>
                 </div>
                 <div className="rounded-xl bg-slate-100 p-4">
-                  <p className="flex items-center text-sm text-slate-500">
-                    P-value
-                    <InfoTooltip text="Measures how surprising the observed imbalance would be if the intended group split were working correctly." />
-                  </p>
+                  <p className="text-sm text-slate-500">P-value</p>
                   <p className="mt-1 font-semibold">{result.srm.p_value}</p>
                 </div>
                 <div className="rounded-xl bg-slate-100 p-4">
@@ -194,14 +325,27 @@ function DiagnosticsPageContent() {
                     {result.srm.is_suspected ? "Suspected SRM" : "No SRM Detected"}
                   </p>
                 </div>
+                <div className="rounded-xl bg-slate-100 p-4">
+                  <p className="text-sm text-slate-500">Expected Split</p>
+                  <p className="mt-1 font-semibold">
+                    {result.srm.expected_proportions
+                      ? Object.entries(result.srm.expected_proportions)
+                          .map(
+                            ([group, proportion]) =>
+                              `${group}: ${(proportion * 100).toFixed(1)}%`
+                          )
+                          .join(", ")
+                      : "50/50 default"}
+                  </p>
+                </div>
               </div>
             </div>
 
             <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-              <h2 className="flex items-center text-xl font-semibold">
-                Missing Outcome by Group
-                <InfoTooltip text="Shows how many rows are missing the selected outcome in each treatment group. Uneven missingness can bias the comparison." />
-              </h2>
+              <div className="flex items-center gap-2">
+                <h2 className="text-xl font-semibold">Missing Outcome by Group</h2>
+                <InfoTooltip text="Count of rows where the selected outcome value is missing in each group." />
+              </div>
               <div className="mt-4 grid gap-4 sm:grid-cols-2">
                 {missingGroups.map((group) => (
                   <div key={group} className="rounded-xl bg-slate-100 p-4">
@@ -215,10 +359,10 @@ function DiagnosticsPageContent() {
             </div>
 
             <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-              <h2 className="flex items-center text-xl font-semibold">
-                Outcome Summary
-                <InfoTooltip text="Shows the raw average outcome for each group before any statistical testing or adjustment." />
-              </h2>
+              <div className="flex items-center gap-2">
+                <h2 className="text-xl font-semibold">Outcome Summary</h2>
+                <InfoTooltip text="Group-level average of the selected outcome. For binary outcomes this is the mean conversion rate; for continuous outcomes this is the mean value." />
+              </div>
               <p className="mt-2 text-sm text-slate-500">
                 Metric: {result.outcome_summary.metric_name}
               </p>
@@ -282,17 +426,17 @@ function DiagnosticsPageContent() {
 }
 
 export default function DiagnosticsPage() {
-    return (
-      <Suspense
-        fallback={
-          <main className="min-h-screen bg-slate-50 px-6 py-10 text-slate-900">
-            <div className="mx-auto max-w-5xl rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
-              Loading diagnostics page...
-            </div>
-          </main>
-        }
-      >
-        <DiagnosticsPageContent />
-      </Suspense>
-    );
-  }
+  return (
+    <Suspense
+      fallback={
+        <main className="min-h-screen bg-slate-50 px-6 py-10 text-slate-900">
+          <div className="mx-auto max-w-5xl rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
+            Loading diagnostics page...
+          </div>
+        </main>
+      }
+    >
+      <DiagnosticsPageContent />
+    </Suspense>
+  );
+}

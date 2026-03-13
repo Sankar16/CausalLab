@@ -10,3 +10,4 @@ class ColumnValidationRequest(BaseModel):
     timestamp_column: Optional[str] = None
     covariate_columns: List[str] = Field(default_factory=list)
     pre_period_column: Optional[str] = None
+    expected_proportions: dict[str, float] | None = None
