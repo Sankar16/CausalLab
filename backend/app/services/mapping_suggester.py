@@ -13,6 +13,16 @@ TREATMENT_KEYWORDS = ["group", "variant", "treatment", "test", "arm", "bucket"]
 OUTCOME_KEYWORDS = ["converted", "conversion", "revenue", "purchase", "clicked", "outcome", "sales"]
 USER_ID_KEYWORDS = ["user_id", "userid", "user id", "customer_id", "visitor_id", "member_id"]
 TIMESTAMP_KEYWORDS = ["timestamp", "datetime", "date", "time", "event_time", "created_at"]
+COVARIATE_EXCLUDE_KEYWORDS = [
+    "revenue",
+    "sales",
+    "purchase",
+    "converted",
+    "conversion",
+    "clicked",
+    "click",
+    "outcome",
+]
 
 
 def suggest_mapping(file_id: str) -> dict[str, Any]:
@@ -61,6 +71,9 @@ def score_name(name: str, keywords: list[str]) -> int:
             score += 3
     return score
 
+def looks_like_alternate_outcome(column_name: str) -> bool:
+    normalized = normalize_name(column_name)
+    return any(keyword in normalized for keyword in COVARIATE_EXCLUDE_KEYWORDS)
 
 def is_row_index_column(series: pd.Series, column_name: str) -> bool:
     normalized = normalize_name(column_name)
@@ -190,26 +203,48 @@ def suggest_timestamp_column(df: pd.DataFrame, columns: list[str]) -> tuple[str 
 def suggest_covariates(
     df: pd.DataFrame, columns: list[str], chosen_columns: set[str]
 ) -> tuple[list[str], list[str]]:
-    covariates: list[str] = []
-    reasons: list[str] = []
+    scored_covariates: list[tuple[int, str, str]] = []
 
     for col in columns:
         if col in chosen_columns:
             continue
         if is_row_index_column(df[col], col):
             continue
+        if looks_like_alternate_outcome(col):
+            continue
 
         series = df[col]
         nunique = series.nunique(dropna=True)
 
-        useful_numeric = pd.api.types.is_numeric_dtype(series) and nunique > 2
-        useful_categorical = (pd.api.types.is_object_dtype(series) or pd.api.types.is_bool_dtype(series)) and 2 <= nunique <= 20
+        score = 0
+        reason = ""
 
-        if useful_numeric or useful_categorical:
-            covariates.append(col)
-            if useful_numeric:
-                reasons.append(f"{col}: numeric column that may explain baseline variation.")
-            else:
-                reasons.append(f"{col}: categorical column that may describe user context.")
+        # Prefer useful categorical baseline/context variables
+        if pd.api.types.is_object_dtype(series) or pd.api.types.is_bool_dtype(series):
+            if 2 <= nunique <= 20:
+                score += 4
+                reason = f"{col}: categorical column that may describe user context."
 
-    return covariates[:5], reasons[:5]
+        # Prefer numeric variables that look like baseline/user-history style features
+        elif pd.api.types.is_numeric_dtype(series):
+            if nunique > 2:
+                score += 3
+                reason = f"{col}: numeric column that may explain baseline variation."
+
+                normalized = normalize_name(col)
+                if any(
+                    keyword in normalized
+                    for keyword in ["prior", "pre_", "pre ", "days_since", "history", "past"]
+                ):
+                    score += 2
+
+        if score > 0:
+            scored_covariates.append((score, col, reason))
+
+    # Sort highest score first, then by column name
+    scored_covariates.sort(key=lambda x: (-x[0], x[1]))
+
+    covariates = [col for _, col, _ in scored_covariates[:5]]
+    reasons = [reason for _, _, reason in scored_covariates[:5]]
+
+    return covariates, reasons
