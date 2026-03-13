@@ -44,7 +44,7 @@ export default function UploadPage() {
       setError("");
       setResult(null);
 
-      const response = await fetch("${API_BASE_URL}/upload/", {
+      const response = await fetch('${API_BASE_URL}/upload/', {
         method: "POST",
         body: formData,
       });

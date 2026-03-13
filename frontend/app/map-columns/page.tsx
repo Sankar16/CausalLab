@@ -117,7 +117,7 @@ function MapColumnsPageContent() {
       setError("");
       setResult(null);
 
-      const response = await fetch("${API_BASE_URL}/validate-columns", {
+      const response = await fetch('${API_BASE_URL}/validate-columns', {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
