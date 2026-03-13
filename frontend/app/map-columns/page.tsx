@@ -30,6 +30,23 @@ type ValidationResponse = {
   };
 };
 
+type SuggestionResponse = {
+  suggested_mapping: {
+    treatment_column: string | null;
+    outcome_column: string | null;
+    user_id_column: string | null;
+    timestamp_column: string | null;
+    covariate_columns: string[];
+  };
+  reasoning: {
+    treatment_column: string;
+    outcome_column: string;
+    user_id_column: string;
+    timestamp_column: string;
+    covariate_columns: string[];
+  };
+};
+
 function MapColumnsPageContent() {
   const searchParams = useSearchParams();
   const fileId = searchParams.get("file_id") || "";
@@ -48,9 +65,10 @@ function MapColumnsPageContent() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<ValidationResponse | null>(null);
   const [error, setError] = useState("");
+  const [suggestions, setSuggestions] = useState<SuggestionResponse | null>(null);
 
   useEffect(() => {
-    const fetchProfile = async () => {
+    const fetchProfileAndSuggestions = async () => {
       if (!fileId) {
         setProfileError("Missing file_id in URL.");
         setProfileLoading(false);
@@ -73,16 +91,59 @@ function MapColumnsPageContent() {
 
         const columns = data.profile.columns;
 
-        if (columns.includes("treatment")) setTreatmentColumn("treatment");
-        if (columns.includes("converted")) setOutcomeColumn("converted");
-        if (columns.includes("user_id")) setUserIdColumn("user_id");
-        if (columns.includes("timestamp")) setTimestampColumn("timestamp");
-        if (columns.includes("pre_period_spend")) setPrePeriodColumn("pre_period_spend");
+        const responseSuggestions = await fetch(`${API_BASE_URL}/suggest-mapping`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ file_id: fileId }),
+        });
 
-        const defaultCovariates = ["device", "country", "prior_orders"].filter((col) =>
-          columns.includes(col)
-        );
-        setCovariateColumns(defaultCovariates);
+        if (responseSuggestions.ok) {
+          const suggestionData: SuggestionResponse = await responseSuggestions.json();
+          setSuggestions(suggestionData);
+
+          const suggested = suggestionData.suggested_mapping;
+
+          if (!treatmentColumn && suggested.treatment_column) {
+            setTreatmentColumn(suggested.treatment_column);
+          }
+          if (!outcomeColumn && suggested.outcome_column) {
+            setOutcomeColumn(suggested.outcome_column);
+          }
+          if (!userIdColumn && suggested.user_id_column) {
+            setUserIdColumn(suggested.user_id_column);
+          }
+          if (!timestampColumn && suggested.timestamp_column) {
+            setTimestampColumn(suggested.timestamp_column);
+          }
+
+          if (!prePeriodColumn && columns.includes("pre_period_spend")) {
+            setPrePeriodColumn("pre_period_spend");
+          }
+
+          if (covariateColumns.length === 0 && suggested.covariate_columns?.length) {
+            const filteredCovariates = suggested.covariate_columns.filter(
+              (col) =>
+                col !== suggested.treatment_column &&
+                col !== suggested.outcome_column &&
+                col !== suggested.user_id_column &&
+                col !== suggested.timestamp_column
+            );
+            setCovariateColumns(filteredCovariates);
+          }
+        } else {
+          if (columns.includes("treatment")) setTreatmentColumn("treatment");
+          if (columns.includes("converted")) setOutcomeColumn("converted");
+          if (columns.includes("user_id")) setUserIdColumn("user_id");
+          if (columns.includes("timestamp")) setTimestampColumn("timestamp");
+          if (columns.includes("pre_period_spend")) setPrePeriodColumn("pre_period_spend");
+
+          const defaultCovariates = ["device", "country", "prior_orders"].filter((col) =>
+            columns.includes(col)
+          );
+          setCovariateColumns(defaultCovariates);
+        }
       } catch (err) {
         const message =
           err instanceof Error ? err.message : "Something went wrong while fetching profile.";
@@ -92,7 +153,7 @@ function MapColumnsPageContent() {
       }
     };
 
-    fetchProfile();
+    fetchProfileAndSuggestions();
   }, [fileId]);
 
   const handleCovariateToggle = (column: string) => {
@@ -220,6 +281,74 @@ function MapColumnsPageContent() {
               </div>
             </div>
 
+            {suggestions && (
+              <div className="mt-6 rounded-2xl border border-blue-200 bg-blue-50 p-6 shadow-sm">
+                <h2 className="text-xl font-semibold text-blue-900">Recommended Mapping</h2>
+                <p className="mt-2 text-blue-800">
+                  CausalLab suggested these roles based on column names, data types, and value
+                  patterns.
+                </p>
+
+                <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                  <div className="rounded-xl bg-white p-4">
+                    <p className="text-sm text-slate-500">Treatment</p>
+                    <p className="mt-1 font-semibold">
+                      {suggestions.suggested_mapping.treatment_column || "No suggestion"}
+                    </p>
+                    <p className="mt-2 text-sm text-slate-600">
+                      {suggestions.reasoning.treatment_column}
+                    </p>
+                  </div>
+
+                  <div className="rounded-xl bg-white p-4">
+                    <p className="text-sm text-slate-500">Outcome</p>
+                    <p className="mt-1 font-semibold">
+                      {suggestions.suggested_mapping.outcome_column || "No suggestion"}
+                    </p>
+                    <p className="mt-2 text-sm text-slate-600">
+                      {suggestions.reasoning.outcome_column}
+                    </p>
+                  </div>
+
+                  <div className="rounded-xl bg-white p-4">
+                    <p className="text-sm text-slate-500">User ID</p>
+                    <p className="mt-1 font-semibold">
+                      {suggestions.suggested_mapping.user_id_column || "No suggestion"}
+                    </p>
+                    <p className="mt-2 text-sm text-slate-600">
+                      {suggestions.reasoning.user_id_column}
+                    </p>
+                  </div>
+
+                  <div className="rounded-xl bg-white p-4">
+                    <p className="text-sm text-slate-500">Timestamp</p>
+                    <p className="mt-1 font-semibold">
+                      {suggestions.suggested_mapping.timestamp_column || "No suggestion"}
+                    </p>
+                    <p className="mt-2 text-sm text-slate-600">
+                      {suggestions.reasoning.timestamp_column}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-4 rounded-xl bg-white p-4">
+                  <p className="text-sm text-slate-500">Suggested Covariates</p>
+                  <p className="mt-1 font-semibold">
+                    {suggestions.suggested_mapping.covariate_columns.length > 0
+                      ? suggestions.suggested_mapping.covariate_columns.join(", ")
+                      : "No covariates suggested"}
+                  </p>
+                  {suggestions.reasoning.covariate_columns.length > 0 && (
+                    <ul className="mt-2 list-disc pl-5 text-sm text-slate-600">
+                      {suggestions.reasoning.covariate_columns.map((reason, idx) => (
+                        <li key={idx}>{reason}</li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </div>
+            )}
+
             <div className="mt-6 grid gap-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
               {renderSelect("Treatment Column", treatmentColumn, setTreatmentColumn, true)}
               {renderSelect("Outcome Column", outcomeColumn, setOutcomeColumn, true)}
@@ -230,20 +359,37 @@ function MapColumnsPageContent() {
               <div>
                 <label className="mb-2 block text-sm font-medium">Covariate Columns</label>
                 <div className="grid gap-2 sm:grid-cols-2">
-                  {columns.map((column) => (
-                    <label
-                      key={column}
-                      className="flex items-center gap-2 rounded-lg border border-slate-200 p-3"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={covariateColumns.includes(column)}
-                        onChange={() => handleCovariateToggle(column)}
-                      />
-                      <span>{column}</span>
-                    </label>
-                  ))}
+                  {columns.map((column) => {
+                    const isProtected =
+                      column === treatmentColumn ||
+                      column === outcomeColumn ||
+                      column === userIdColumn ||
+                      column === timestampColumn;
+
+                    return (
+                      <label
+                        key={column}
+                        className={`flex items-center gap-2 rounded-lg border p-3 ${
+                          isProtected
+                            ? "border-slate-100 bg-slate-50 text-slate-400"
+                            : "border-slate-200"
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={covariateColumns.includes(column)}
+                          onChange={() => handleCovariateToggle(column)}
+                          disabled={isProtected}
+                        />
+                        <span>{column}</span>
+                      </label>
+                    );
+                  })}
                 </div>
+                <p className="mt-2 text-sm text-slate-500">
+                  Covariates are optional supporting variables such as user context or prior
+                  behavior. Do not select treatment or outcome as covariates.
+                </p>
               </div>
 
               <button
@@ -348,17 +494,17 @@ function MapColumnsPageContent() {
 }
 
 export default function MapColumnsPage() {
-    return (
-      <Suspense
-        fallback={
-          <main className="min-h-screen bg-slate-50 px-6 py-10 text-slate-900">
-            <div className="mx-auto max-w-5xl rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
-              Loading column mapping...
-            </div>
-          </main>
-        }
-      >
-        <MapColumnsPageContent />
-      </Suspense>
-    );
-  }
+  return (
+    <Suspense
+      fallback={
+        <main className="min-h-screen bg-slate-50 px-6 py-10 text-slate-900">
+          <div className="mx-auto max-w-5xl rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
+            Loading column mapping...
+          </div>
+        </main>
+      }
+    >
+      <MapColumnsPageContent />
+    </Suspense>
+  );
+}
