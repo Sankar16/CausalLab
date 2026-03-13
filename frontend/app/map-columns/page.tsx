@@ -467,7 +467,7 @@ function MapColumnsPageContent() {
             {result.valid && result.summary && (
               <div className="mt-6">
                 <a
-                  href={`/diagnostics?file_id=${encodeURIComponent(
+                  href={`/data-readiness?file_id=${encodeURIComponent(
                     fileId
                   )}&treatment_column=${encodeURIComponent(
                     treatmentColumn
@@ -482,7 +482,7 @@ function MapColumnsPageContent() {
                   )}&covariates=${encodeURIComponent(covariateColumns.join(","))}`}
                   className="inline-block rounded-xl bg-emerald-700 px-5 py-3 text-white transition hover:bg-emerald-600"
                 >
-                  Continue to Diagnostics
+                  Continue to Data Readiness Check
                 </a>
               </div>
             )}

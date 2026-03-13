@@ -7,6 +7,7 @@ from app.api.routes.profile import router as profile_router
 from app.api.routes.analysis import router as analysis_router
 from app.api.routes.llm import router as llm_router
 from app.api.routes.suggestions import router as suggestions_router
+from app.api.routes.data_readiness import router as data_readiness_router
 
 app = FastAPI(title="CausalLab API")
 
@@ -27,6 +28,7 @@ app.add_middleware(
 app.include_router(upload_router)
 app.include_router(profile_router)
 app.include_router(suggestions_router)
+app.include_router(data_readiness_router)
 app.include_router(analysis_router)
 app.include_router(llm_router)
 
