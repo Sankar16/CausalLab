@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { API_BASE_URL } from "@/lib/api";
 
 type ProfileResponse = {
   file_id: string;
@@ -60,7 +61,7 @@ export default function MapColumnsPage() {
         setProfileLoading(true);
         setProfileError("");
 
-        const response = await fetch(`http://127.0.0.1:8000/profile/${fileId}`);
+        const response = await fetch(`${API_BASE_URL}/profile/${fileId}`);
 
         if (!response.ok) {
           const errorData = await response.json();
@@ -116,7 +117,7 @@ export default function MapColumnsPage() {
       setError("");
       setResult(null);
 
-      const response = await fetch("http://127.0.0.1:8000/validate-columns", {
+      const response = await fetch("${API_BASE_URL}/validate-columns", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

@@ -3,6 +3,7 @@
 import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import InfoTooltip from "@/components/InfoTooltip";
+import { API_BASE_URL } from "@/lib/api";
 
 type DiagnosticsResponse = {
   treatment_counts: Record<string, number>;
@@ -76,7 +77,7 @@ export default function AnalysisPage() {
       if (!fileId || !treatmentColumn || !outcomeColumn) return;
 
       try {
-        const response = await fetch("http://127.0.0.1:8000/diagnostics", {
+        const response = await fetch("${API_BASE_URL}/diagnostics", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -123,7 +124,7 @@ export default function AnalysisPage() {
       setError("");
       setResult(null);
 
-      const response = await fetch("http://127.0.0.1:8000/analyze", {
+      const response = await fetch("${API_BASE_URL}/analyze", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

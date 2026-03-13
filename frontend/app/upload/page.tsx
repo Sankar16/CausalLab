@@ -1,6 +1,7 @@
 "use client";
 
 import { ChangeEvent, useState } from "react";
+import { API_BASE_URL } from "@/lib/api";
 
 type UploadResponse = {
   message: string;
@@ -43,7 +44,7 @@ export default function UploadPage() {
       setError("");
       setResult(null);
 
-      const response = await fetch("http://127.0.0.1:8000/upload/", {
+      const response = await fetch("${API_BASE_URL}/upload/", {
         method: "POST",
         body: formData,
       });

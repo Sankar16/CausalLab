@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { API_BASE_URL } from "@/lib/api";
 
 type DiagnosticsResponse = {
   treatment_counts: Record<string, number>;
@@ -103,12 +104,12 @@ export default function ReportPage() {
         };
 
         const [diagRes, analysisRes] = await Promise.all([
-          fetch("http://127.0.0.1:8000/diagnostics", {
+          fetch("${API_BASE_URL}/diagnostics", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload),
           }),
-          fetch("http://127.0.0.1:8000/analyze", {
+          fetch("${API_BASE_URL}/analyze", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload),
@@ -163,7 +164,7 @@ export default function ReportPage() {
       setSummaryError("");
       setLlmSummary(null);
 
-      const response = await fetch("http://127.0.0.1:8000/llm-summary", {
+      const response = await fetch("${API_BASE_URL}/llm-summary", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
