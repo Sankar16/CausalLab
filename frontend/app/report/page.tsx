@@ -104,12 +104,12 @@ function ReportPageContent() {
         };
 
         const [diagRes, analysisRes] = await Promise.all([
-          fetch('${API_BASE_URL}/diagnostics', {
+          fetch(`${API_BASE_URL}/diagnostics`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload),
           }),
-          fetch('${API_BASE_URL}/analyze', {
+          fetch(`${API_BASE_URL}/analyze`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload),
@@ -164,7 +164,7 @@ function ReportPageContent() {
       setSummaryError("");
       setLlmSummary(null);
 
-      const response = await fetch('${API_BASE_URL}/llm-summary', {
+      const response = await fetch(`${API_BASE_URL}/llm-summary`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

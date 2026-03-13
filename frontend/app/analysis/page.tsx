@@ -77,7 +77,7 @@ function AnalysisPageContent() {
       if (!fileId || !treatmentColumn || !outcomeColumn) return;
 
       try {
-        const response = await fetch('${API_BASE_URL}/diagnostics', {
+        const response = await fetch(`${API_BASE_URL}/diagnostics`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -124,7 +124,7 @@ function AnalysisPageContent() {
       setError("");
       setResult(null);
 
-      const response = await fetch('${API_BASE_URL}/analyze', {
+      const response = await fetch(`${API_BASE_URL}/analyze`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

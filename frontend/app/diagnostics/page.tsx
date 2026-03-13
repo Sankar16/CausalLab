@@ -51,7 +51,7 @@ function DiagnosticsPageContent() {
       setError("");
       setResult(null);
 
-      const response = await fetch('${API_BASE_URL}/diagnostics', {
+      const response = await fetch(`${API_BASE_URL}/diagnostics`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
