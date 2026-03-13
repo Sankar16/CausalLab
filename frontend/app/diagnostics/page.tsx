@@ -208,6 +208,26 @@ export default function DiagnosticsPage() {
                 </p>
               </div>
             )}
+            <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                <a
+                    href={`/analysis?file_id=${encodeURIComponent(
+                    fileId
+                    )}&treatment_column=${encodeURIComponent(
+                    treatmentColumn
+                    )}&outcome_column=${encodeURIComponent(
+                    outcomeColumn
+                    )}&user_id_column=${encodeURIComponent(
+                    userIdColumn
+                    )}&timestamp_column=${encodeURIComponent(
+                    timestampColumn
+                    )}&pre_period_column=${encodeURIComponent(
+                    prePeriodColumn
+                    )}&covariates=${encodeURIComponent(covariateColumns.join(","))}`}
+                    className="inline-block rounded-xl bg-emerald-700 px-5 py-3 text-white transition hover:bg-emerald-600"
+                >
+                    Continue to Analysis
+                </a>
+            </div>
           </div>
         )}
       </div>
