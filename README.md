@@ -159,7 +159,7 @@ So the most accurate description is:
 
 Replace these with your deployed URLs:
 
-- **Frontend:** `https://your-vercel-url.vercel.app`
+- **Frontend:** `https://causal-lab.vercel.app`
 - **Backend API Docs:** `https://causallab.onrender.com/docs`
 
 ## Example Use Cases
@@ -261,13 +261,14 @@ FRONTEND_URL=https://your-vercel-url.vercel.app
 ```
 
 ## Screenshots
-![Upload](<Screenshot 2026-03-13 at 12.17.08 AM.png>)
-![Mapping](<Screenshot 2026-03-13 at 12.17.42 AM.png>)
-![Validation](<Screenshot 2026-03-13 at 12.17.52 AM.png>)
-![Diagnostic](<Screenshot 2026-03-13 at 12.18.12 AM.png>)
-![Analysis](<Screenshot 2026-03-13 at 12.18.37 AM.png>)
-![Executive Summary](<Screenshot 2026-03-13 at 12.19.25 AM.png>)
-![Summary](<Screenshot 2026-03-13 at 12.19.37 AM.png>)
+
+![Upload](docs/screenshots/upload.png)
+![Mapping](docs/screenshots/mapping.png)
+![Validation](docs/screenshots/validation.png)
+![Diagnostics](docs/screenshots/diagnostics.png)
+![Analysis](docs/screenshots/analysis.png)
+![Executive Summary](docs/screenshots/executive-summary.png)
+![Report](docs/screenshots/report.png)
 
 ## Limitations
 
