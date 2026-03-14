@@ -2,6 +2,7 @@
 
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import TrustScoreCard from "@/components/TrustScoreCard";
 import { API_BASE_URL } from "@/lib/api";
 
 type DiagnosticsResponse = {
@@ -10,6 +11,7 @@ type DiagnosticsResponse = {
     chi_square_stat: number;
     p_value: number;
     is_suspected: boolean;
+    expected_proportions?: Record<string, number>;
   };
   missing_outcome_by_group: Record<string, number>;
   outcome_summary: {
@@ -46,6 +48,22 @@ type AnalysisResponse = {
   interpretation: string;
 };
 
+type TrustScoreResponse = {
+  trust_score: number;
+  decision: "Proceed" | "Proceed with Caution" | "Do Not Trust Yet";
+  summary: string;
+  reasons: string[];
+  deductions: {
+    factor: string;
+    points: number;
+    reason: string;
+  }[];
+  positive_signals: string[];
+  biggest_risk: string | null;
+  strongest_positive_signal: string | null;
+  recommended_next_step: string;
+};
+
 type LLMSummaryResponse = {
   executive_summary: string;
   reliability_note: string;
@@ -74,10 +92,11 @@ function ReportPageContent() {
 
   const [diagnostics, setDiagnostics] = useState<DiagnosticsResponse | null>(null);
   const [analysis, setAnalysis] = useState<AnalysisResponse | null>(null);
+  const [trust, setTrust] = useState<TrustScoreResponse | null>(null);
+  const [llmSummary, setLlmSummary] = useState<LLMSummaryResponse | null>(null);
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-
-  const [llmSummary, setLlmSummary] = useState<LLMSummaryResponse | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [summaryError, setSummaryError] = useState("");
 
@@ -103,7 +122,7 @@ function ReportPageContent() {
           pre_period_column: prePeriodColumn || null,
         };
 
-        const [diagRes, analysisRes] = await Promise.all([
+        const [diagRes, analysisRes, trustRes] = await Promise.all([
           fetch(`${API_BASE_URL}/diagnostics`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -113,6 +132,14 @@ function ReportPageContent() {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload),
+          }),
+          fetch(`${API_BASE_URL}/trust-score`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              ...payload,
+              expected_proportions: null,
+            }),
           }),
         ]);
 
@@ -131,6 +158,11 @@ function ReportPageContent() {
 
         setDiagnostics(diagData);
         setAnalysis(analysisData);
+
+        if (trustRes.ok) {
+          const trustData: TrustScoreResponse = await trustRes.json();
+          setTrust(trustData);
+        }
       } catch (err) {
         const message =
           err instanceof Error ? err.message : "Something went wrong while loading the report.";
@@ -157,12 +189,14 @@ function ReportPageContent() {
   };
 
   const handleGenerateSummary = async () => {
-    if (!diagnostics || !analysis) return;
+    if (!diagnostics || !analysis) {
+      setSummaryError("Diagnostics and analysis must be available first.");
+      return;
+    }
 
     try {
       setSummaryLoading(true);
       setSummaryError("");
-      setLlmSummary(null);
 
       const response = await fetch(`${API_BASE_URL}/llm-summary`, {
         method: "POST",
@@ -170,30 +204,21 @@ function ReportPageContent() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          metadata: {
-            file_id: fileId,
-            treatment_column: treatmentColumn,
-            outcome_column: outcomeColumn,
-            user_id_column: userIdColumn || null,
-            timestamp_column: timestampColumn || null,
-            pre_period_column: prePeriodColumn || null,
-            covariates: covariateColumns,
-          },
           diagnostics,
           analysis,
         }),
       });
 
       if (!response.ok) {
-        const err = await response.json();
-        throw new Error(err.detail || "Failed to generate executive summary.");
+        const errorData = await response.json();
+        throw new Error(errorData.detail || "Failed to generate executive summary.");
       }
 
       const data: LLMSummaryResponse = await response.json();
       setLlmSummary(data);
     } catch (err) {
       const message =
-        err instanceof Error ? err.message : "Failed to generate executive summary.";
+        err instanceof Error ? err.message : "Something went wrong while generating the summary.";
       setSummaryError(message);
     } finally {
       setSummaryLoading(false);
@@ -262,42 +287,42 @@ function ReportPageContent() {
 
           {!loading && !error && diagnostics && analysis && (
             <div className="mt-8 space-y-8">
-              <section>
-                <div className="flex flex-wrap items-center gap-3">
-                  <h2 className="text-xl font-semibold">Executive Summary</h2>
+              {trust && <TrustScoreCard trust={trust} />}
+
+              <section className="print:hidden">
+                <h2 className="text-xl font-semibold">Executive Summary</h2>
+                <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
                   <button
                     onClick={handleGenerateSummary}
                     disabled={summaryLoading}
-                    className="rounded-xl bg-slate-900 px-4 py-2 text-sm text-white hover:bg-slate-700 disabled:opacity-60 print:hidden"
+                    className="rounded-xl bg-slate-900 px-5 py-3 text-white transition hover:bg-slate-700 disabled:opacity-60"
                   >
                     {summaryLoading ? "Generating..." : "Generate Executive Summary"}
                   </button>
+
+                  {summaryError && (
+                    <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-red-700">
+                      {summaryError}
+                    </div>
+                  )}
+
+                  {llmSummary && (
+                    <div className="mt-6 space-y-4">
+                      <div className="rounded-xl bg-slate-100 p-4">
+                        <h3 className="font-semibold">Executive Summary</h3>
+                        <p className="mt-2 text-slate-700">{llmSummary.executive_summary}</p>
+                      </div>
+                      <div className="rounded-xl bg-slate-100 p-4">
+                        <h3 className="font-semibold">Reliability Note</h3>
+                        <p className="mt-2 text-slate-700">{llmSummary.reliability_note}</p>
+                      </div>
+                      <div className="rounded-xl bg-slate-100 p-4">
+                        <h3 className="font-semibold">Recommendation</h3>
+                        <p className="mt-2 text-slate-700">{llmSummary.recommendation}</p>
+                      </div>
+                    </div>
+                  )}
                 </div>
-
-                {summaryError && (
-                  <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-4 text-red-700">
-                    {summaryError}
-                  </div>
-                )}
-
-                {llmSummary && (
-                  <div className="mt-4 space-y-4">
-                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                      <p className="text-sm font-semibold text-slate-500">Executive Summary</p>
-                      <p className="mt-2 text-slate-800">{llmSummary.executive_summary}</p>
-                    </div>
-
-                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                      <p className="text-sm font-semibold text-slate-500">Reliability Note</p>
-                      <p className="mt-2 text-slate-800">{llmSummary.reliability_note}</p>
-                    </div>
-
-                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                      <p className="text-sm font-semibold text-slate-500">Recommendation</p>
-                      <p className="mt-2 text-slate-800">{llmSummary.recommendation}</p>
-                    </div>
-                  </div>
-                )}
               </section>
 
               <section>
@@ -470,17 +495,17 @@ function ReportPageContent() {
 }
 
 export default function ReportPage() {
-    return (
-      <Suspense
-        fallback={
-          <main className="min-h-screen bg-slate-50 px-6 py-10 text-slate-900">
-            <div className="mx-auto max-w-4xl rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
-              Loading report...
-            </div>
-          </main>
-        }
-      >
-        <ReportPageContent />
-      </Suspense>
-    );
-  }
+  return (
+    <Suspense
+      fallback={
+        <main className="min-h-screen bg-slate-50 px-6 py-10 text-slate-900">
+          <div className="mx-auto max-w-4xl rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
+            Loading report page...
+          </div>
+        </main>
+      }
+    >
+      <ReportPageContent />
+    </Suspense>
+  );
+}

@@ -9,6 +9,7 @@ from app.api.routes.llm import router as llm_router
 from app.api.routes.suggestions import router as suggestions_router
 from app.api.routes.data_readiness import router as data_readiness_router
 from app.api.routes.fixes import router as fixes_router
+from app.api.routes.trust_score import router as trust_score_router
 
 app = FastAPI(title="CausalLab API")
 
@@ -32,6 +33,7 @@ app.include_router(suggestions_router)
 app.include_router(data_readiness_router)
 app.include_router(fixes_router)
 app.include_router(analysis_router)
+app.include_router(trust_score_router)
 app.include_router(llm_router)
 
 

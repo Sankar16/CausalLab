@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import InfoTooltip from "@/components/InfoTooltip";
 import { API_BASE_URL } from "@/lib/api";
 import MetricComparisonChart from "@/components/charts/MetricComparisonChart";
+import TrustScoreCard from "@/components/TrustScoreCard";
 import {
   ResponsiveContainer,
   BarChart,
@@ -60,6 +61,22 @@ type AnalysisResponse = {
     high: number;
   };
   interpretation: string;
+};
+
+type TrustScoreResponse = {
+  trust_score: number;
+  decision: "Proceed" | "Proceed with Caution" | "Do Not Trust Yet";
+  summary: string;
+  reasons: string[];
+  deductions: {
+    factor: string;
+    points: number;
+    reason: string;
+  }[];
+  positive_signals: string[];
+  biggest_risk: string | null;
+  strongest_positive_signal: string | null;
+  recommended_next_step: string;
 };
 
 function AbsoluteLiftChart({
@@ -133,12 +150,7 @@ function ConfidenceIntervalChart({
               Math.max(high * scale, estimate * scale) + Math.abs(high * scale) * 0.2,
             ]}
           />
-          <YAxis
-            type="number"
-            dataKey="y"
-            domain={[0, 2]}
-            hide
-          />
+          <YAxis type="number" dataKey="y" domain={[0, 2]} hide />
           <ZAxis type="number" dataKey="z" range={[60, 220]} />
           <Tooltip
             cursor={{ strokeDasharray: "3 3" }}
@@ -150,7 +162,14 @@ function ConfidenceIntervalChart({
             }}
           />
           <ReferenceLine x={0} stroke="#94a3b8" />
-          <ReferenceLine segment={[{ x: low * scale, y: 1 }, { x: high * scale, y: 1 }]} stroke="#93c5fd" strokeWidth={4} />
+          <ReferenceLine
+            segment={[
+              { x: low * scale, y: 1 },
+              { x: high * scale, y: 1 },
+            ]}
+            stroke="#93c5fd"
+            strokeWidth={4}
+          />
           <Scatter data={chartData} fill="#2563eb" />
         </ScatterChart>
       </ResponsiveContainer>
@@ -177,10 +196,11 @@ function AnalysisPageContent() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<AnalysisResponse | null>(null);
   const [diagnostics, setDiagnostics] = useState<DiagnosticsResponse | null>(null);
+  const [trust, setTrust] = useState<TrustScoreResponse | null>(null);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    const fetchDiagnostics = async () => {
+    const fetchDiagnosticsAndTrust = async () => {
       if (!fileId || !treatmentColumn || !outcomeColumn) return;
 
       try {
@@ -200,16 +220,38 @@ function AnalysisPageContent() {
           }),
         });
 
-        if (!response.ok) return;
+        if (response.ok) {
+          const data: DiagnosticsResponse = await response.json();
+          setDiagnostics(data);
+        }
 
-        const data: DiagnosticsResponse = await response.json();
-        setDiagnostics(data);
+        const trustResponse = await fetch(`${API_BASE_URL}/trust-score`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            file_id: fileId,
+            treatment_column: treatmentColumn,
+            outcome_column: outcomeColumn,
+            user_id_column: userIdColumn || null,
+            timestamp_column: timestampColumn || null,
+            covariate_columns: covariateColumns,
+            pre_period_column: prePeriodColumn || null,
+            expected_proportions: null,
+          }),
+        });
+
+        if (trustResponse.ok) {
+          const trustData: TrustScoreResponse = await trustResponse.json();
+          setTrust(trustData);
+        }
       } catch {
-        // Keep page usable even if diagnostics fetch fails
+        // keep page usable
       }
     };
 
-    fetchDiagnostics();
+    fetchDiagnosticsAndTrust();
   }, [
     fileId,
     treatmentColumn,
@@ -327,17 +369,16 @@ function AnalysisPageContent() {
         </p>
 
         <div className="mt-4 rounded-lg bg-slate-100 p-4 text-sm text-slate-700">
-          <p>
-            <span className="font-medium">File ID:</span> {fileId || "Not found"}
-          </p>
-          <p>
-            <span className="font-medium">Treatment Column:</span>{" "}
-            {treatmentColumn || "Not found"}
-          </p>
-          <p>
-            <span className="font-medium">Outcome Column:</span> {outcomeColumn || "Not found"}
-          </p>
+          <p><span className="font-medium">File ID:</span> {fileId || "Not found"}</p>
+          <p><span className="font-medium">Treatment Column:</span> {treatmentColumn || "Not found"}</p>
+          <p><span className="font-medium">Outcome Column:</span> {outcomeColumn || "Not found"}</p>
         </div>
+
+        {trust && (
+          <div className="mt-6">
+            <TrustScoreCard trust={trust} />
+          </div>
+        )}
 
         {diagnostics && (
           <>
@@ -371,7 +412,9 @@ function AnalysisPageContent() {
               </div>
             ) : (
               <div className="mt-6 rounded-2xl border border-emerald-200 bg-emerald-50 p-6 shadow-sm">
-                <h2 className="text-xl font-semibold text-emerald-800">Healthy Experiment Signals</h2>
+                <h2 className="text-xl font-semibold text-emerald-800">
+                  Healthy Experiment Signals
+                </h2>
                 <p className="mt-2 text-emerald-700">
                   No major diagnostic warnings were detected before analysis.
                 </p>
@@ -391,9 +434,9 @@ function AnalysisPageContent() {
         </div>
 
         {loading && (
-        <div className="mt-6 rounded-lg border border-blue-200 bg-blue-50 p-4 text-blue-700">
+          <div className="mt-6 rounded-lg border border-blue-200 bg-blue-50 p-4 text-blue-700">
             Running analysis and updating charts...
-        </div>
+          </div>
         )}
 
         {error && (

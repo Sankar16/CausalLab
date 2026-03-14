@@ -7,6 +7,7 @@ import { API_BASE_URL } from "@/lib/api";
 import SrmSplitChart from "@/components/charts/SrmSplitChart";
 import GroupBarChart from "@/components/charts/GroupBarChart";
 import MetricComparisonChart from "@/components/charts/MetricComparisonChart";
+import TrustScoreCard from "@/components/TrustScoreCard";
 
 type DiagnosticsResponse = {
   treatment_counts: Record<string, number>;
@@ -22,6 +23,22 @@ type DiagnosticsResponse = {
     by_group: Record<string, number>;
   };
   warnings: string[];
+};
+
+type TrustScoreResponse = {
+  trust_score: number;
+  decision: "Proceed" | "Proceed with Caution" | "Do Not Trust Yet";
+  summary: string;
+  reasons: string[];
+  deductions: {
+    factor: string;
+    points: number;
+    reason: string;
+  }[];
+  positive_signals: string[];
+  biggest_risk: string | null;
+  strongest_positive_signal: string | null;
+  recommended_next_step: string;
 };
 
 function DiagnosticsPageContent() {
@@ -42,6 +59,7 @@ function DiagnosticsPageContent() {
 
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<DiagnosticsResponse | null>(null);
+  const [trust, setTrust] = useState<TrustScoreResponse | null>(null);
   const [error, setError] = useState("");
 
   const [expectedMode, setExpectedMode] = useState<"equal" | "custom">("equal");
@@ -74,6 +92,28 @@ function DiagnosticsPageContent() {
     setExpectedGroup1(group1Percent);
   };
 
+  const fetchTrustScore = async (expectedProportions?: Record<string, number> | null) => {
+    const response = await fetch(`${API_BASE_URL}/trust-score`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        file_id: fileId,
+        treatment_column: treatmentColumn,
+        outcome_column: outcomeColumn,
+        user_id_column: userIdColumn || null,
+        timestamp_column: timestampColumn || null,
+        covariate_columns: covariateColumns,
+        pre_period_column: prePeriodColumn || null,
+        expected_proportions: expectedProportions ?? null,
+      }),
+    });
+
+    if (!response.ok) return null;
+    return (await response.json()) as TrustScoreResponse;
+  };
+
   const handleRunDiagnostics = async () => {
     if (!fileId || !treatmentColumn || !outcomeColumn) {
       setError("Missing required parameters in URL.");
@@ -84,6 +124,7 @@ function DiagnosticsPageContent() {
       setLoading(true);
       setError("");
       setResult(null);
+      setTrust(null);
 
       let expectedProportions: Record<string, number> | null = null;
 
@@ -141,6 +182,9 @@ function DiagnosticsPageContent() {
 
       const data: DiagnosticsResponse = await response.json();
       setResult(data);
+
+      const trustData = await fetchTrustScore(expectedProportions);
+      if (trustData) setTrust(trustData);
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Something went wrong while running diagnostics.";
@@ -186,16 +230,9 @@ function DiagnosticsPageContent() {
         </p>
 
         <div className="mt-4 rounded-lg bg-slate-100 p-4 text-sm text-slate-700">
-          <p>
-            <span className="font-medium">File ID:</span> {fileId || "Not found"}
-          </p>
-          <p>
-            <span className="font-medium">Treatment Column:</span>{" "}
-            {treatmentColumn || "Not found"}
-          </p>
-          <p>
-            <span className="font-medium">Outcome Column:</span> {outcomeColumn || "Not found"}
-          </p>
+          <p><span className="font-medium">File ID:</span> {fileId || "Not found"}</p>
+          <p><span className="font-medium">Treatment Column:</span> {treatmentColumn || "Not found"}</p>
+          <p><span className="font-medium">Outcome Column:</span> {outcomeColumn || "Not found"}</p>
         </div>
 
         <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -297,6 +334,8 @@ function DiagnosticsPageContent() {
 
         {result && (
           <div className="mt-8 space-y-6">
+            {trust && <TrustScoreCard trust={trust} />}
+
             <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
               <div className="flex items-center gap-2">
                 <h2 className="text-xl font-semibold">Treatment Counts</h2>
