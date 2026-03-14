@@ -4,18 +4,19 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import InfoTooltip from "@/components/InfoTooltip";
 import { API_BASE_URL } from "@/lib/api";
-import GroupBarChart from "@/components/charts/GroupBarChart";
 import MetricComparisonChart from "@/components/charts/MetricComparisonChart";
 import {
   ResponsiveContainer,
-  ComposedChart,
+  BarChart,
+  Bar,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
-  Bar,
   ReferenceLine,
+  ScatterChart,
   Scatter,
+  ZAxis,
 } from "recharts";
 
 type DiagnosticsResponse = {
@@ -61,104 +62,97 @@ type AnalysisResponse = {
   interpretation: string;
 };
 
-function ConfidenceIntervalChart({
+function AbsoluteLiftChart({
   metricType,
   absoluteLift,
-  low,
-  high,
 }: {
   metricType: "binary" | "continuous";
   absoluteLift: number;
-  low: number;
-  high: number;
 }) {
-  const scale = metricType === "binary" ? 100 : 1;
+  const displayValue = metricType === "binary" ? absoluteLift * 100 : absoluteLift;
 
-  const data = [
-    {
-      name: "Lift",
-      low: low * scale,
-      estimate: absoluteLift * scale,
-      high: high * scale,
-    },
-  ];
+  const data = [{ name: "Absolute Lift", value: displayValue }];
 
-  const formatter = (value: number) => {
-    return metricType === "binary" ? `${value.toFixed(2)} pp` : value.toFixed(2);
-  };
+  const formatter = (value: number) =>
+    metricType === "binary" ? `${value.toFixed(2)} pp` : value.toFixed(2);
 
   return (
-    <div className="h-80 w-full">
+    <div className="h-72 w-full">
       <ResponsiveContainer width="100%" height="100%">
-        <ComposedChart data={data} margin={{ top: 20, right: 20, left: 10, bottom: 10 }}>
+        <BarChart data={data} margin={{ top: 16, right: 16, left: 0, bottom: 8 }}>
           <CartesianGrid strokeDasharray="3 3" />
           <XAxis dataKey="name" />
           <YAxis />
+          <ReferenceLine y={0} stroke="#94a3b8" />
           <Tooltip
-            formatter={(value: any, name: any) => {
+            formatter={(value: any) => {
               const numeric = typeof value === "number" ? value : Number(value);
-              if (!Number.isNaN(numeric)) {
-                return [formatter(numeric), name];
-              }
-              return [String(value ?? ""), String(name ?? "")];
+              return [formatter(numeric), "Absolute Lift"];
             }}
           />
-          <ReferenceLine y={0} stroke="#94a3b8" />
-          <Bar dataKey="high" fill="#dbeafe" radius={[8, 8, 0, 0]} name="Upper bound" />
-          <Bar dataKey="low" fill="#bfdbfe" radius={[8, 8, 0, 0]} name="Lower bound" />
-          <Scatter dataKey="estimate" fill="#1d4ed8" name="Point estimate" />
-        </ComposedChart>
+          <Bar dataKey="value" fill="#0f172a" radius={[8, 8, 0, 0]} />
+        </BarChart>
       </ResponsiveContainer>
     </div>
   );
 }
 
-function EffectBreakdownChart({
+function ConfidenceIntervalChart({
   metricType,
-  absoluteLift,
-  relativeLift,
+  estimate,
+  low,
+  high,
 }: {
   metricType: "binary" | "continuous";
-  absoluteLift: number;
-  relativeLift: number | null;
+  estimate: number;
+  low: number;
+  high: number;
 }) {
-  const data = [
-    {
-      name: "Absolute Lift",
-      value: metricType === "binary" ? absoluteLift * 100 : absoluteLift,
-    },
-    {
-      name: "Relative Lift",
-      value: relativeLift !== null ? relativeLift * 100 : 0,
-    },
+  const scale = metricType === "binary" ? 100 : 1;
+
+  const chartData = [
+    { x: low * scale, y: 1, z: 8, label: "Lower" },
+    { x: estimate * scale, y: 1, z: 14, label: "Estimate" },
+    { x: high * scale, y: 1, z: 8, label: "Upper" },
   ];
 
-  const formatter = (value: number, label: string) => {
-    if (label === "Absolute Lift") {
-      return metricType === "binary" ? `${value.toFixed(2)} pp` : value.toFixed(2);
-    }
-    return `${value.toFixed(2)}%`;
-  };
+  const formatter = (value: number) =>
+    metricType === "binary" ? `${value.toFixed(2)} pp` : value.toFixed(2);
 
   return (
-    <div className="h-80 w-full">
+    <div className="h-72 w-full">
       <ResponsiveContainer width="100%" height="100%">
-        <ComposedChart data={data} margin={{ top: 16, right: 16, left: 0, bottom: 8 }}>
+        <ScatterChart margin={{ top: 20, right: 24, left: 24, bottom: 20 }}>
           <CartesianGrid strokeDasharray="3 3" />
-          <XAxis dataKey="name" />
-          <YAxis />
+          <XAxis
+            type="number"
+            dataKey="x"
+            name="Effect"
+            domain={[
+              Math.min(0, low * scale) - Math.abs(low * scale) * 0.2,
+              Math.max(high * scale, estimate * scale) + Math.abs(high * scale) * 0.2,
+            ]}
+          />
+          <YAxis
+            type="number"
+            dataKey="y"
+            domain={[0, 2]}
+            hide
+          />
+          <ZAxis type="number" dataKey="z" range={[60, 220]} />
           <Tooltip
-            formatter={(value: any, name: any, payload: any) => {
-              const numeric = typeof value === "number" ? value : Number(value);
-              if (!Number.isNaN(numeric)) {
-                return [formatter(numeric, payload?.payload?.name ?? ""), name];
+            cursor={{ strokeDasharray: "3 3" }}
+            formatter={(value: any, _name: any, props: any) => {
+              if (props?.payload?.label) {
+                return [formatter(props.payload.x), props.payload.label];
               }
-              return [String(value ?? ""), String(name ?? "")];
+              return [String(value ?? ""), ""];
             }}
           />
-          <ReferenceLine y={0} stroke="#94a3b8" />
-          <Bar dataKey="value" fill="#0f172a" radius={[8, 8, 0, 0]} />
-        </ComposedChart>
+          <ReferenceLine x={0} stroke="#94a3b8" />
+          <ReferenceLine segment={[{ x: low * scale, y: 1 }, { x: high * scale, y: 1 }]} stroke="#93c5fd" strokeWidth={4} />
+          <Scatter data={chartData} fill="#2563eb" />
+        </ScatterChart>
       </ResponsiveContainer>
     </div>
   );
@@ -211,7 +205,7 @@ function AnalysisPageContent() {
         const data: DiagnosticsResponse = await response.json();
         setDiagnostics(data);
       } catch {
-        // keep page usable
+        // Keep page usable even if diagnostics fetch fails
       }
     };
 
@@ -235,7 +229,6 @@ function AnalysisPageContent() {
     try {
       setLoading(true);
       setError("");
-      setResult(null);
 
       const response = await fetch(`${API_BASE_URL}/analyze`, {
         method: "POST",
@@ -280,8 +273,8 @@ function AnalysisPageContent() {
 
     if (result.metric_type === "binary") {
       return {
-        [controlLabel]: result.outcome_rates?.[controlLabel] ?? 0,
-        [treatmentLabel]: result.outcome_rates?.[treatmentLabel] ?? 0,
+        [controlLabel]: (result.outcome_rates?.[controlLabel] ?? 0) * 100,
+        [treatmentLabel]: (result.outcome_rates?.[treatmentLabel] ?? 0) * 100,
       };
     }
 
@@ -293,7 +286,7 @@ function AnalysisPageContent() {
 
   const metricValueFormatter = (value: number) => {
     if (!result) return value.toFixed(2);
-    return result.metric_type === "binary" ? `${(value * 100).toFixed(2)}%` : value.toFixed(2);
+    return result.metric_type === "binary" ? `${value.toFixed(2)}%` : value.toFixed(2);
   };
 
   const ciText = result
@@ -397,6 +390,12 @@ function AnalysisPageContent() {
           </button>
         </div>
 
+        {loading && (
+        <div className="mt-6 rounded-lg border border-blue-200 bg-blue-50 p-4 text-blue-700">
+            Running analysis and updating charts...
+        </div>
+        )}
+
         {error && (
           <div className="mt-6 rounded-lg border border-red-200 bg-red-50 p-4 text-red-700">
             {error}
@@ -464,10 +463,9 @@ function AnalysisPageContent() {
                 </div>
 
                 <div className="mt-6">
-                  <EffectBreakdownChart
+                  <AbsoluteLiftChart
                     metricType={result.metric_type}
                     absoluteLift={result.effect.absolute_lift}
-                    relativeLift={result.effect.relative_lift}
                   />
                 </div>
               </div>
@@ -486,7 +484,7 @@ function AnalysisPageContent() {
                 <div className="mt-6">
                   <ConfidenceIntervalChart
                     metricType={result.metric_type}
-                    absoluteLift={result.effect.absolute_lift}
+                    estimate={result.effect.absolute_lift}
                     low={result.confidence_interval_95.low}
                     high={result.confidence_interval_95.high}
                   />
