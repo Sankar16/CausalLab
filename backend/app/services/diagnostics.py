@@ -102,13 +102,16 @@ def run_experiment_diagnostics(payload: dict) -> dict:
     )
 
     outcome_series = df[outcome_col]
-    non_null_outcome = outcome_series.dropna()
+    numeric_outcome = pd.to_numeric(outcome_series, errors="coerce")
+    non_null_outcome = numeric_outcome.dropna()
+
     binary_values = set(non_null_outcome.unique().tolist()) if len(non_null_outcome) > 0 else set()
-    is_binary = binary_values.issubset({0, 1, True, False})
+    is_binary = binary_values.issubset({0, 1})
 
     if is_binary:
         outcome_summary = (
-            df.groupby(treatment_col)[outcome_col]
+            df.assign(_numeric_outcome=numeric_outcome)
+            .groupby(treatment_col)["_numeric_outcome"]
             .mean()
             .round(6)
             .to_dict()
@@ -116,7 +119,8 @@ def run_experiment_diagnostics(payload: dict) -> dict:
         outcome_metric_name = "mean_outcome_rate"
     else:
         outcome_summary = (
-            df.groupby(treatment_col)[outcome_col]
+            df.assign(_numeric_outcome=numeric_outcome)
+            .groupby(treatment_col)["_numeric_outcome"]
             .mean()
             .round(6)
             .to_dict()

@@ -4,6 +4,9 @@ import { Suspense, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import InfoTooltip from "@/components/InfoTooltip";
 import { API_BASE_URL } from "@/lib/api";
+import SrmSplitChart from "@/components/charts/SrmSplitChart";
+import GroupBarChart from "@/components/charts/GroupBarChart";
+import MetricComparisonChart from "@/components/charts/MetricComparisonChart";
 
 type DiagnosticsResponse = {
   treatment_counts: Record<string, number>;
@@ -53,6 +56,10 @@ function DiagnosticsPageContent() {
     if (!Number.isFinite(firstValue)) return "";
     return String(100 - firstValue);
   }, [expectedGroup1]);
+
+  const allMissingOutcomeZero =
+    result &&
+    Object.values(result.missing_outcome_by_group).every((value) => value === 0);
 
   const handleUseObservedSplit = () => {
     if (!result || treatmentGroups.length !== 2) return;
@@ -143,9 +150,16 @@ function DiagnosticsPageContent() {
     }
   };
 
+  const outcomeChartValueFormatter = (value: number) => {
+    if (result?.outcome_summary.metric_name === "mean_outcome_rate") {
+      return `${(value * 100).toFixed(2)}%`;
+    }
+    return value.toFixed(4);
+  };
+
   return (
     <main className="min-h-screen bg-slate-50 px-6 py-10 text-slate-900">
-      <div className="mx-auto max-w-5xl">
+      <div className="mx-auto max-w-6xl">
         <a
           href={`/map-columns?file_id=${encodeURIComponent(
             fileId
@@ -288,6 +302,7 @@ function DiagnosticsPageContent() {
                 <h2 className="text-xl font-semibold">Treatment Counts</h2>
                 <InfoTooltip text="Observed row counts for each experiment group." />
               </div>
+
               <div className="mt-4 grid gap-4 sm:grid-cols-2">
                 {treatmentGroups.map((group) => (
                   <div key={group} className="rounded-xl bg-slate-100 p-4">
@@ -297,6 +312,15 @@ function DiagnosticsPageContent() {
                     </p>
                   </div>
                 ))}
+              </div>
+
+              <div className="mt-6">
+                <GroupBarChart
+                  title=""
+                  data={result.treatment_counts}
+                  seriesLabel="Count"
+                  fill="#0f172a"
+                />
               </div>
             </div>
 
@@ -339,6 +363,18 @@ function DiagnosticsPageContent() {
                   </p>
                 </div>
               </div>
+
+              <div className="mt-6">
+                <SrmSplitChart
+                  treatmentCounts={result.treatment_counts}
+                  expectedProportions={result.srm.expected_proportions}
+                />
+              </div>
+
+              <p className="mt-3 text-sm text-slate-500">
+                This chart compares the observed treatment allocation against the expected split
+                used for SRM detection.
+              </p>
             </div>
 
             <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -346,6 +382,7 @@ function DiagnosticsPageContent() {
                 <h2 className="text-xl font-semibold">Missing Outcome by Group</h2>
                 <InfoTooltip text="Count of rows where the selected outcome value is missing in each group." />
               </div>
+
               <div className="mt-4 grid gap-4 sm:grid-cols-2">
                 {missingGroups.map((group) => (
                   <div key={group} className="rounded-xl bg-slate-100 p-4">
@@ -356,6 +393,21 @@ function DiagnosticsPageContent() {
                   </div>
                 ))}
               </div>
+
+              {allMissingOutcomeZero ? (
+                <div className="mt-6 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-800">
+                  No missing outcome values were detected in any group.
+                </div>
+              ) : (
+                <div className="mt-6">
+                  <GroupBarChart
+                    title=""
+                    data={result.missing_outcome_by_group}
+                    seriesLabel="Missing Rows"
+                    fill="#b91c1c"
+                  />
+                </div>
+              )}
             </div>
 
             <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -363,18 +415,32 @@ function DiagnosticsPageContent() {
                 <h2 className="text-xl font-semibold">Outcome Summary</h2>
                 <InfoTooltip text="Group-level average of the selected outcome. For binary outcomes this is the mean conversion rate; for continuous outcomes this is the mean value." />
               </div>
+
               <p className="mt-2 text-sm text-slate-500">
                 Metric: {result.outcome_summary.metric_name}
               </p>
+
               <div className="mt-4 grid gap-4 sm:grid-cols-2">
                 {outcomeGroups.map((group) => (
                   <div key={group} className="rounded-xl bg-slate-100 p-4">
                     <p className="text-sm text-slate-500">{group}</p>
                     <p className="mt-1 text-xl font-semibold">
-                      {result.outcome_summary.by_group[group]}
+                      {outcomeChartValueFormatter(result.outcome_summary.by_group[group])}
                     </p>
                   </div>
                 ))}
+              </div>
+
+              <div className="mt-6">
+                <MetricComparisonChart
+                  data={result.outcome_summary.by_group}
+                  seriesLabel={
+                    result.outcome_summary.metric_name === "mean_outcome_rate"
+                      ? "Outcome Rate"
+                      : "Outcome Value"
+                  }
+                  valueFormatter={outcomeChartValueFormatter}
+                />
               </div>
             </div>
 

@@ -265,13 +265,20 @@ def run_data_readiness_checks(payload: dict[str, Any]) -> dict[str, Any]:
     # Covariate numeric coercion checks
     covariate_issues: list[str] = []
     for col in covariate_cols:
-        if pd.api.types.is_numeric_dtype(df[col]) or pd.api.types.is_bool_dtype(df[col]) or pd.api.types.is_object_dtype(df[col]):
+        if col not in df.columns:
+            covariate_issues.append(f"{col} (column not found)")
             continue
 
-        coerced = pd.to_numeric(df[col], errors="coerce")
-        parse_rate = float(coerced.notna().mean()) if len(df) > 0 else 0.0
-        if parse_rate < 0.95:
-            covariate_issues.append(f"{col} ({parse_rate:.0%} numeric parse success)")
+        # Numeric covariates are fine
+        if pd.api.types.is_numeric_dtype(df[col]) or pd.api.types.is_bool_dtype(df[col]):
+            continue
+
+        # Categorical/string covariates are also acceptable
+        if pd.api.types.is_object_dtype(df[col]) or pd.api.types.is_string_dtype(df[col]):
+            continue
+
+        # Only warn if truly unusual/unusable
+        covariate_issues.append(f"{col} (unsupported dtype)")
 
     if len(covariate_issues) == 0:
         checks.append(

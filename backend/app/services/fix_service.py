@@ -71,15 +71,20 @@ def _coerce_binary_outcome(series: pd.Series) -> tuple[pd.Series, int]:
         "false": 0,
         "True": 1,
         "False": 0,
+        "yes": 1,
+        "no": 0,
+        "Yes": 1,
+        "No": 0,
         1: 1,
         0: 0,
         True: 1,
         False: 0,
     }
 
-    def normalize(value: Any) -> Any:
+    def normalize(value):
         if pd.isna(value):
             return pd.NA
+
         if value in mapping:
             return mapping[value]
 
@@ -91,12 +96,13 @@ def _coerce_binary_outcome(series: pd.Series) -> tuple[pd.Series, int]:
         if lowered in mapping:
             return mapping[lowered]
 
-        return value
+        return pd.NA
 
     cleaned = series.apply(normalize)
+    cleaned = pd.to_numeric(cleaned, errors="coerce")
+
     changed = int((original.astype(str) != cleaned.astype(str)).sum())
     return cleaned, changed
-
 
 def apply_safe_fixes(payload: dict[str, Any]) -> dict[str, Any]:
     file_id = payload["file_id"]
