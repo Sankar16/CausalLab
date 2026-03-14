@@ -22,29 +22,42 @@ def compute_trust_score(payload: dict[str, Any]) -> dict[str, Any]:
     except Exception as exc:
         analysis_error = str(exc)
 
-    score = 100
+    # Start below 100 so the best case still feels realistic
+    score = 95
+
     deductions: list[dict[str, Any]] = []
     positive_signals: list[str] = []
-    reasons: list[str] = []
 
     readiness_status = readiness.get("readiness_status")
     if readiness_status == "not_ready":
         score -= 40
         deductions.append(
-            {"factor": "data_readiness", "points": 40, "reason": "Dataset is not ready for reliable analysis."}
+            {
+                "factor": "data_readiness",
+                "points": 40,
+                "reason": "Dataset is not ready for reliable analysis.",
+            }
         )
     elif readiness_status == "needs_review":
         score -= 15
         deductions.append(
-            {"factor": "data_readiness", "points": 15, "reason": "Dataset needs review before full confidence."}
+            {
+                "factor": "data_readiness",
+                "points": 15,
+                "reason": "Dataset needs review before full confidence.",
+            }
         )
     else:
-        positive_signals.append("Data readiness checks did not find major structural blockers.")
+        positive_signals.append("No major structural readiness blockers were detected.")
 
     if diagnostics["srm"]["is_suspected"]:
         score -= 35
         deductions.append(
-            {"factor": "sample_ratio_mismatch", "points": 35, "reason": "Sample Ratio Mismatch was detected."}
+            {
+                "factor": "sample_ratio_mismatch",
+                "points": 35,
+                "reason": "Sample Ratio Mismatch was detected.",
+            }
         )
     else:
         positive_signals.append("No Sample Ratio Mismatch was detected under the selected allocation.")
@@ -53,7 +66,11 @@ def compute_trust_score(payload: dict[str, Any]) -> dict[str, Any]:
     if total_missing_outcome > 0:
         score -= 15
         deductions.append(
-            {"factor": "missing_outcome", "points": 15, "reason": f"Outcome data has {total_missing_outcome} missing rows."}
+            {
+                "factor": "missing_outcome",
+                "points": 15,
+                "reason": f"Outcome data has {total_missing_outcome} missing rows.",
+            }
         )
     else:
         positive_signals.append("No missing outcome data was detected across groups.")
@@ -78,7 +95,11 @@ def compute_trust_score(payload: dict[str, Any]) -> dict[str, Any]:
         if p_value >= 0.05:
             score -= 10
             deductions.append(
-                {"factor": "statistical_significance", "points": 10, "reason": "Result is not statistically significant."}
+                {
+                    "factor": "statistical_significance",
+                    "points": 10,
+                    "reason": "Result is not statistically significant.",
+                }
             )
         else:
             positive_signals.append("The treatment effect is statistically significant.")
@@ -86,17 +107,25 @@ def compute_trust_score(payload: dict[str, Any]) -> dict[str, Any]:
         if _ci_crosses_zero(ci_low, ci_high):
             score -= 10
             deductions.append(
-                {"factor": "confidence_interval", "points": 10, "reason": "Confidence interval crosses zero."}
+                {
+                    "factor": "confidence_interval",
+                    "points": 10,
+                    "reason": "Confidence interval crosses zero.",
+                }
             )
         else:
             positive_signals.append("Confidence interval does not cross zero.")
     else:
         score -= 10
         deductions.append(
-            {"factor": "analysis_unavailable", "points": 10, "reason": "Analysis could not be computed for trust scoring."}
+            {
+                "factor": "analysis_unavailable",
+                "points": 10,
+                "reason": "Analysis could not be computed for trust scoring.",
+            }
         )
 
-    score = max(0, min(100, score))
+    score = max(0, min(95, score))
 
     if score >= 80:
         decision = "Proceed"
@@ -111,10 +140,11 @@ def compute_trust_score(payload: dict[str, Any]) -> dict[str, Any]:
         summary = "The experiment currently has too many trust risks to support a confident decision."
         recommended_next_step = "Resolve data or diagnostic issues before using this result for decision-making."
 
+    # Better reasons for clean cases
     if deductions:
         reasons = [item["reason"] for item in deductions]
     else:
-        reasons = ["No major trust deductions were triggered."]
+        reasons = positive_signals[:5] if positive_signals else ["No major trust deductions were triggered."]
 
     biggest_risk = deductions[0]["reason"] if deductions else None
     strongest_positive_signal = positive_signals[0] if positive_signals else None

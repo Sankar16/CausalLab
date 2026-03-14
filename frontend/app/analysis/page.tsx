@@ -87,6 +87,8 @@ function AbsoluteLiftChart({
   absoluteLift: number;
 }) {
   const displayValue = metricType === "binary" ? absoluteLift * 100 : absoluteLift;
+  const minDomain = Math.min(0, displayValue * 1.15);
+  const maxDomain = Math.max(0, displayValue * 1.15);
 
   const data = [{ name: "Absolute Lift", value: displayValue }];
 
@@ -99,7 +101,10 @@ function AbsoluteLiftChart({
         <BarChart data={data} margin={{ top: 16, right: 16, left: 0, bottom: 8 }}>
           <CartesianGrid strokeDasharray="3 3" />
           <XAxis dataKey="name" />
-          <YAxis />
+          <YAxis
+            domain={[minDomain, maxDomain]}
+            tickFormatter={(value) => formatter(Number(value))}
+          />
           <ReferenceLine y={0} stroke="#94a3b8" />
           <Tooltip
             formatter={(value: any) => {
@@ -127,10 +132,17 @@ function ConfidenceIntervalChart({
 }) {
   const scale = metricType === "binary" ? 100 : 1;
 
+  const scaledLow = low * scale;
+  const scaledEstimate = estimate * scale;
+  const scaledHigh = high * scale;
+
+  const minDomain = Math.min(0, scaledLow) - Math.abs(scaledHigh - scaledLow) * 0.25;
+  const maxDomain = Math.max(0, scaledHigh) + Math.abs(scaledHigh - scaledLow) * 0.25;
+
   const chartData = [
-    { x: low * scale, y: 1, z: 8, label: "Lower" },
-    { x: estimate * scale, y: 1, z: 14, label: "Estimate" },
-    { x: high * scale, y: 1, z: 8, label: "Upper" },
+    { x: scaledLow, y: 1, z: 8, label: "Lower bound" },
+    { x: scaledEstimate, y: 1, z: 14, label: "Point estimate" },
+    { x: scaledHigh, y: 1, z: 8, label: "Upper bound" },
   ];
 
   const formatter = (value: number) =>
@@ -144,11 +156,8 @@ function ConfidenceIntervalChart({
           <XAxis
             type="number"
             dataKey="x"
-            name="Effect"
-            domain={[
-              Math.min(0, low * scale) - Math.abs(low * scale) * 0.2,
-              Math.max(high * scale, estimate * scale) + Math.abs(high * scale) * 0.2,
-            ]}
+            domain={[minDomain, maxDomain]}
+            tickFormatter={(value) => formatter(Number(value))}
           />
           <YAxis type="number" dataKey="y" domain={[0, 2]} hide />
           <ZAxis type="number" dataKey="z" range={[60, 220]} />
@@ -164,8 +173,8 @@ function ConfidenceIntervalChart({
           <ReferenceLine x={0} stroke="#94a3b8" />
           <ReferenceLine
             segment={[
-              { x: low * scale, y: 1 },
-              { x: high * scale, y: 1 },
+              { x: scaledLow, y: 1 },
+              { x: scaledHigh, y: 1 },
             ]}
             stroke="#93c5fd"
             strokeWidth={4}

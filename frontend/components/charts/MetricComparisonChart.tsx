@@ -27,6 +27,9 @@ export default function MetricComparisonChart({
     value,
   }));
 
+  const maxValue = Math.max(...chartData.map((d) => d.value), 0);
+  const paddedMax = maxValue === 0 ? 1 : maxValue * 1.15;
+
   return (
     <div className="h-80 w-full">
       <ResponsiveContainer width="100%" height="100%">
@@ -37,7 +40,17 @@ export default function MetricComparisonChart({
           barCategoryGap={18}
         >
           <CartesianGrid strokeDasharray="3 3" />
-          <XAxis type="number" />
+          <XAxis
+            type="number"
+            domain={[0, paddedMax]}
+            tickFormatter={(value) => {
+              const numeric = typeof value === "number" ? value : Number(value);
+              if (!Number.isNaN(numeric) && valueFormatter) {
+                return valueFormatter(numeric);
+              }
+              return String(value);
+            }}
+          />
           <YAxis dataKey="group" type="category" width={90} />
           <ReferenceLine x={0} stroke="#94a3b8" />
           <Tooltip
