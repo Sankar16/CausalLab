@@ -40,17 +40,20 @@ export default function SrmSplitChart({
     };
   });
 
+  const maxValue = Math.max(...data.flatMap((d) => [d.observed, d.expected]), 0);
+  const paddedMax = maxValue === 0 ? 1 : maxValue * 1.1;
+
   return (
     <div className="h-80 w-full">
       <ResponsiveContainer width="100%" height="100%">
         <BarChart
           data={data}
           layout="vertical"
-          margin={{ top: 16, right: 16, left: 16, bottom: 8 }}
+          margin={{ top: 16, right: 20, left: 16, bottom: 8 }}
           barCategoryGap={18}
         >
           <CartesianGrid strokeDasharray="3 3" />
-          <XAxis type="number" />
+          <XAxis type="number" domain={[0, paddedMax]} allowDecimals={false} />
           <YAxis dataKey="group" type="category" width={90} />
           <Tooltip
             formatter={(value: any, name: any, payload: any) => {

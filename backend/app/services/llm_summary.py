@@ -1,67 +1,76 @@
 from __future__ import annotations
 
-import json
 import os
+from typing import Any
+
 from openai import OpenAI
 
 
-def generate_executive_summary(payload: dict) -> dict:
+def generate_llm_summary(payload: dict[str, Any]) -> dict[str, str]:
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
-      raise ValueError("OPENAI_API_KEY is not set in the backend environment.")
+        raise ValueError("OPENAI_API_KEY is not configured.")
 
     client = OpenAI(api_key=api_key)
 
     diagnostics = payload["diagnostics"]
     analysis = payload["analysis"]
-    metadata = payload.get("metadata", {})
+    trust = payload.get("trust_score")
 
     prompt = f"""
-You are writing a professional A/B testing report summary for a business stakeholder.
+You are writing a stakeholder-facing experiment summary for an A/B test review platform.
 
-Use ONLY the structured data provided below.
-Do not invent numbers.
-Do not recalculate statistics.
-Write clearly and professionally in plain English.
+Your task:
+Write 3 sections:
+1. executive_summary
+2. reliability_note
+3. recommendation
 
-Return valid JSON with exactly these keys:
-- executive_summary
-- reliability_note
-- recommendation
-
-Metadata:
-{json.dumps(metadata, indent=2)}
+Rules:
+- Write in plain business English
+- Be precise and short
+- Separate statistical result from experiment trust
+- Mention whether the result is statistically significant
+- Mention the confidence interval
+- Mention key trust risks such as SRM or missing outcomes
+- If trust information is available, use it explicitly
+- Recommendation should be practical and decision-oriented
+- Do not use markdown
+- Return valid JSON only with keys:
+  executive_summary, reliability_note, recommendation
 
 Diagnostics:
-{json.dumps(diagnostics, indent=2)}
+{diagnostics}
 
 Analysis:
-{json.dumps(analysis, indent=2)}
+{analysis}
 
-Instructions:
-- executive_summary: 4-6 sentences
-- reliability_note: 2-4 sentences
-- recommendation: 2-4 sentences
-- If diagnostics contain SRM or missing-outcome warnings, clearly say the result should be interpreted cautiously.
-- If diagnostics are clean, say confidence is relatively stronger.
-- Make it easy for a stakeholder to understand.
+Trust score:
+{trust}
 """
 
-    response = client.responses.create(
-        model="gpt-5.2",
-        input=prompt,
+    response = client.chat.completions.create(
+        model="gpt-4.1-mini",
+        temperature=0.2,
+        response_format={"type": "json_object"},
+        messages=[
+            {
+                "role": "system",
+                "content": "You are a precise experimentation analyst who writes concise stakeholder summaries.",
+            },
+            {
+                "role": "user",
+                "content": prompt,
+            },
+        ],
     )
 
-    text = response.output_text.strip()
+    content = response.choices[0].message.content
+    if not content:
+      raise ValueError("LLM returned empty content.")
 
-    try:
-        parsed = json.loads(text)
-    except json.JSONDecodeError:
-        return {
-            "executive_summary": text,
-            "reliability_note": "",
-            "recommendation": "",
-        }
+    import json
+    parsed = json.loads(content)
 
     return {
         "executive_summary": parsed.get("executive_summary", ""),

@@ -101,10 +101,7 @@ function AbsoluteLiftChart({
         <BarChart data={data} margin={{ top: 16, right: 16, left: 0, bottom: 8 }}>
           <CartesianGrid strokeDasharray="3 3" />
           <XAxis dataKey="name" />
-          <YAxis
-            domain={[minDomain, maxDomain]}
-            tickFormatter={(value) => formatter(Number(value))}
-          />
+          <YAxis domain={[minDomain, maxDomain]} tickFormatter={(value) => formatter(Number(value))} />
           <ReferenceLine y={0} stroke="#94a3b8" />
           <Tooltip
             formatter={(value: any) => {
@@ -112,7 +109,7 @@ function AbsoluteLiftChart({
               return [formatter(numeric), "Absolute Lift"];
             }}
           />
-          <Bar dataKey="value" fill="#0f172a" radius={[8, 8, 0, 0]} />
+          <Bar dataKey="value" name="Absolute Lift" fill="#0f172a" radius={[8, 8, 0, 0]} />
         </BarChart>
       </ResponsiveContainer>
     </div>
@@ -136,8 +133,9 @@ function ConfidenceIntervalChart({
   const scaledEstimate = estimate * scale;
   const scaledHigh = high * scale;
 
-  const minDomain = Math.min(0, scaledLow) - Math.abs(scaledHigh - scaledLow) * 0.25;
-  const maxDomain = Math.max(0, scaledHigh) + Math.abs(scaledHigh - scaledLow) * 0.25;
+  const spread = Math.abs(scaledHigh - scaledLow) || 1;
+  const minDomain = Math.min(0, scaledLow) - spread * 0.25;
+  const maxDomain = Math.max(0, scaledHigh) + spread * 0.25;
 
   const chartData = [
     { x: scaledLow, y: 1, z: 8, label: "Lower bound" },
@@ -196,6 +194,9 @@ function AnalysisPageContent() {
   const timestampColumn = searchParams.get("timestamp_column") || "";
   const prePeriodColumn = searchParams.get("pre_period_column") || "";
   const covariatesParam = searchParams.get("covariates") || "";
+  const expectedMode =
+    (searchParams.get("expected_mode") as "equal" | "custom" | null) || "equal";
+  const expectedGroup1 = searchParams.get("expected_group_1") || "50";
 
   const covariateColumns = covariatesParam
     .split(",")
@@ -208,46 +209,73 @@ function AnalysisPageContent() {
   const [trust, setTrust] = useState<TrustScoreResponse | null>(null);
   const [error, setError] = useState("");
 
+  const buildExpectedProportions = (
+    treatmentCounts?: Record<string, number>
+  ): Record<string, number> | null => {
+    if (expectedMode !== "custom") return null;
+    if (!treatmentCounts) return null;
+
+    const groups = Object.keys(treatmentCounts);
+    if (groups.length !== 2) return null;
+
+    const firstValue = Number(expectedGroup1);
+    if (!Number.isFinite(firstValue)) return null;
+
+    return {
+      [groups[0]]: firstValue / 100,
+      [groups[1]]: (100 - firstValue) / 100,
+    };
+  };
+
   useEffect(() => {
     const fetchDiagnosticsAndTrust = async () => {
       if (!fileId || !treatmentColumn || !outcomeColumn) return;
 
       try {
-        const response = await fetch(`${API_BASE_URL}/diagnostics`, {
+        const diagPayloadBase = {
+          file_id: fileId,
+          treatment_column: treatmentColumn,
+          outcome_column: outcomeColumn,
+          user_id_column: userIdColumn || null,
+          timestamp_column: timestampColumn || null,
+          covariate_columns: covariateColumns,
+          pre_period_column: prePeriodColumn || null,
+        };
+
+        const initialDiagRes = await fetch(`${API_BASE_URL}/diagnostics`, {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            file_id: fileId,
-            treatment_column: treatmentColumn,
-            outcome_column: outcomeColumn,
-            user_id_column: userIdColumn || null,
-            timestamp_column: timestampColumn || null,
-            covariate_columns: covariateColumns,
-            pre_period_column: prePeriodColumn || null,
+            ...diagPayloadBase,
+            expected_proportions: null,
           }),
         });
 
-        if (response.ok) {
-          const data: DiagnosticsResponse = await response.json();
-          setDiagnostics(data);
+        if (!initialDiagRes.ok) return;
+
+        const initialDiagData: DiagnosticsResponse = await initialDiagRes.json();
+        const expectedProportions = buildExpectedProportions(initialDiagData.treatment_counts);
+
+        const finalDiagRes = await fetch(`${API_BASE_URL}/diagnostics`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            ...diagPayloadBase,
+            expected_proportions: expectedProportions,
+          }),
+        });
+
+        if (finalDiagRes.ok) {
+          const finalDiagData: DiagnosticsResponse = await finalDiagRes.json();
+          setDiagnostics(finalDiagData);
         }
 
         const trustResponse = await fetch(`${API_BASE_URL}/trust-score`, {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            file_id: fileId,
-            treatment_column: treatmentColumn,
-            outcome_column: outcomeColumn,
-            user_id_column: userIdColumn || null,
-            timestamp_column: timestampColumn || null,
-            covariate_columns: covariateColumns,
-            pre_period_column: prePeriodColumn || null,
-            expected_proportions: null,
+            ...diagPayloadBase,
+            expected_proportions: expectedProportions,
           }),
         });
 
@@ -269,6 +297,8 @@ function AnalysisPageContent() {
     timestampColumn,
     prePeriodColumn,
     covariateColumns,
+    expectedMode,
+    expectedGroup1,
   ]);
 
   const handleRunAnalysis = async () => {
@@ -366,7 +396,11 @@ function AnalysisPageContent() {
             timestampColumn
           )}&pre_period_column=${encodeURIComponent(
             prePeriodColumn
-          )}&covariates=${encodeURIComponent(covariateColumns.join(","))}`}
+          )}&covariates=${encodeURIComponent(
+            covariateColumns.join(",")
+          )}&expected_mode=${encodeURIComponent(
+            expectedMode
+          )}&expected_group_1=${encodeURIComponent(expectedGroup1)}`}
           className="text-sm text-slate-500 hover:text-slate-900"
         >
           ← Back to diagnostics
@@ -597,7 +631,11 @@ function AnalysisPageContent() {
                   timestampColumn
                 )}&pre_period_column=${encodeURIComponent(
                   prePeriodColumn
-                )}&covariates=${encodeURIComponent(covariateColumns.join(","))}`}
+                )}&covariates=${encodeURIComponent(
+                  covariateColumns.join(",")
+                )}&expected_mode=${encodeURIComponent(
+                  expectedMode
+                )}&expected_group_1=${encodeURIComponent(expectedGroup1)}`}
                 className="inline-block rounded-xl bg-emerald-700 px-5 py-3 text-white transition hover:bg-emerald-600"
               >
                 Open Report

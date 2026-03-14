@@ -63,10 +63,10 @@ export default function MetricComparisonChart({
                   : NaN;
 
               if (!Number.isNaN(numericValue) && valueFormatter) {
-                return valueFormatter(numericValue);
+                return [valueFormatter(numericValue), seriesLabel];
               }
 
-              return String(value ?? "");
+              return [String(value ?? ""), seriesLabel];
             }}
           />
           <Bar dataKey="value" name={seriesLabel} fill="#2563eb" radius={[0, 8, 8, 0]} />

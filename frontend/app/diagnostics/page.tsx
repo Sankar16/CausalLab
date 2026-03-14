@@ -51,6 +51,9 @@ function DiagnosticsPageContent() {
   const timestampColumn = searchParams.get("timestamp_column") || "";
   const prePeriodColumn = searchParams.get("pre_period_column") || "";
   const covariatesParam = searchParams.get("covariates") || "";
+  const expectedModeFromUrl =
+    (searchParams.get("expected_mode") as "equal" | "custom" | null) || "equal";
+  const expectedGroup1FromUrl = searchParams.get("expected_group_1") || "50";
 
   const covariateColumns = covariatesParam
     .split(",")
@@ -62,8 +65,8 @@ function DiagnosticsPageContent() {
   const [trust, setTrust] = useState<TrustScoreResponse | null>(null);
   const [error, setError] = useState("");
 
-  const [expectedMode, setExpectedMode] = useState<"equal" | "custom">("equal");
-  const [expectedGroup1, setExpectedGroup1] = useState("50");
+  const [expectedMode, setExpectedMode] = useState<"equal" | "custom">(expectedModeFromUrl);
+  const [expectedGroup1, setExpectedGroup1] = useState(expectedGroup1FromUrl);
 
   const treatmentGroups = result ? Object.keys(result.treatment_counts) : [];
   const outcomeGroups = result ? Object.keys(result.outcome_summary.by_group) : [];
@@ -200,6 +203,9 @@ function DiagnosticsPageContent() {
     }
     return value.toFixed(4);
   };
+
+  const expectedModeForNext = expectedMode;
+  const expectedGroup1ForNext = expectedGroup1;
 
   return (
     <main className="min-h-screen bg-slate-50 px-6 py-10 text-slate-900">
@@ -346,20 +352,13 @@ function DiagnosticsPageContent() {
                 {treatmentGroups.map((group) => (
                   <div key={group} className="rounded-xl bg-slate-100 p-4">
                     <p className="text-sm text-slate-500">{group}</p>
-                    <p className="mt-1 text-xl font-semibold">
-                      {result.treatment_counts[group]}
-                    </p>
+                    <p className="mt-1 text-xl font-semibold">{result.treatment_counts[group]}</p>
                   </div>
                 ))}
               </div>
 
               <div className="mt-6">
-                <GroupBarChart
-                  title=""
-                  data={result.treatment_counts}
-                  seriesLabel="Count"
-                  fill="#0f172a"
-                />
+                <GroupBarChart title="" data={result.treatment_counts} seriesLabel="Count" fill="#0f172a" />
               </div>
             </div>
 
@@ -380,11 +379,7 @@ function DiagnosticsPageContent() {
                 </div>
                 <div className="rounded-xl bg-slate-100 p-4">
                   <p className="text-sm text-slate-500">Status</p>
-                  <p
-                    className={`mt-1 font-semibold ${
-                      result.srm.is_suspected ? "text-red-700" : "text-emerald-700"
-                    }`}
-                  >
+                  <p className={`mt-1 font-semibold ${result.srm.is_suspected ? "text-red-700" : "text-emerald-700"}`}>
                     {result.srm.is_suspected ? "Suspected SRM" : "No SRM Detected"}
                   </p>
                 </div>
@@ -393,10 +388,7 @@ function DiagnosticsPageContent() {
                   <p className="mt-1 font-semibold">
                     {result.srm.expected_proportions
                       ? Object.entries(result.srm.expected_proportions)
-                          .map(
-                            ([group, proportion]) =>
-                              `${group}: ${(proportion * 100).toFixed(1)}%`
-                          )
+                          .map(([group, proportion]) => `${group}: ${(proportion * 100).toFixed(1)}%`)
                           .join(", ")
                       : "50/50 default"}
                   </p>
@@ -411,8 +403,7 @@ function DiagnosticsPageContent() {
               </div>
 
               <p className="mt-3 text-sm text-slate-500">
-                This chart compares the observed treatment allocation against the expected split
-                used for SRM detection.
+                This chart compares the observed treatment allocation against the expected split used for SRM detection.
               </p>
             </div>
 
@@ -426,9 +417,7 @@ function DiagnosticsPageContent() {
                 {missingGroups.map((group) => (
                   <div key={group} className="rounded-xl bg-slate-100 p-4">
                     <p className="text-sm text-slate-500">{group}</p>
-                    <p className="mt-1 text-xl font-semibold">
-                      {result.missing_outcome_by_group[group]}
-                    </p>
+                    <p className="mt-1 text-xl font-semibold">{result.missing_outcome_by_group[group]}</p>
                   </div>
                 ))}
               </div>
@@ -455,9 +444,7 @@ function DiagnosticsPageContent() {
                 <InfoTooltip text="Group-level average of the selected outcome. For binary outcomes this is the mean conversion rate; for continuous outcomes this is the mean value." />
               </div>
 
-              <p className="mt-2 text-sm text-slate-500">
-                Metric: {result.outcome_summary.metric_name}
-              </p>
+              <p className="mt-2 text-sm text-slate-500">Metric: {result.outcome_summary.metric_name}</p>
 
               <div className="mt-4 grid gap-4 sm:grid-cols-2">
                 {outcomeGroups.map((group) => (
@@ -494,9 +481,7 @@ function DiagnosticsPageContent() {
               </div>
             ) : (
               <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-6 shadow-sm">
-                <h2 className="text-xl font-semibold text-emerald-800">
-                  Diagnostics Summary
-                </h2>
+                <h2 className="text-xl font-semibold text-emerald-800">Diagnostics Summary</h2>
                 <p className="mt-2 text-emerald-700">
                   No major diagnostic warnings were detected for this dataset.
                 </p>
@@ -517,7 +502,11 @@ function DiagnosticsPageContent() {
                   timestampColumn
                 )}&pre_period_column=${encodeURIComponent(
                   prePeriodColumn
-                )}&covariates=${encodeURIComponent(covariateColumns.join(","))}`}
+                )}&covariates=${encodeURIComponent(
+                  covariateColumns.join(",")
+                )}&expected_mode=${encodeURIComponent(
+                  expectedModeForNext
+                )}&expected_group_1=${encodeURIComponent(expectedGroup1ForNext)}`}
                 className="inline-block rounded-xl bg-emerald-700 px-5 py-3 text-white transition hover:bg-emerald-600"
               >
                 Continue to Analysis

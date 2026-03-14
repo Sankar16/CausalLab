@@ -80,6 +80,9 @@ function ReportPageContent() {
   const timestampColumn = searchParams.get("timestamp_column") || "";
   const prePeriodColumn = searchParams.get("pre_period_column") || "";
   const covariatesParam = searchParams.get("covariates") || "";
+  const expectedMode =
+    (searchParams.get("expected_mode") as "equal" | "custom" | null) || "equal";
+  const expectedGroup1 = searchParams.get("expected_group_1") || "50";
 
   const covariateColumns = useMemo(
     () =>
@@ -100,6 +103,24 @@ function ReportPageContent() {
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [summaryError, setSummaryError] = useState("");
 
+  const buildExpectedProportions = (
+    treatmentCounts?: Record<string, number>
+  ): Record<string, number> | null => {
+    if (expectedMode !== "custom") return null;
+    if (!treatmentCounts) return null;
+
+    const groups = Object.keys(treatmentCounts);
+    if (groups.length !== 2) return null;
+
+    const firstValue = Number(expectedGroup1);
+    if (!Number.isFinite(firstValue)) return null;
+
+    return {
+      [groups[0]]: firstValue / 100,
+      [groups[1]]: (100 - firstValue) / 100,
+    };
+  };
+
   useEffect(() => {
     const loadReportData = async () => {
       if (!fileId || !treatmentColumn || !outcomeColumn) {
@@ -112,7 +133,7 @@ function ReportPageContent() {
         setLoading(true);
         setError("");
 
-        const payload = {
+        const payloadBase = {
           file_id: fileId,
           treatment_column: treatmentColumn,
           outcome_column: outcomeColumn,
@@ -122,23 +143,43 @@ function ReportPageContent() {
           pre_period_column: prePeriodColumn || null,
         };
 
+        const diagResInitial = await fetch(`${API_BASE_URL}/diagnostics`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            ...payloadBase,
+            expected_proportions: null,
+          }),
+        });
+
+        if (!diagResInitial.ok) {
+          const err = await diagResInitial.json();
+          throw new Error(err.detail || "Failed to fetch diagnostics.");
+        }
+
+        const initialDiagData: DiagnosticsResponse = await diagResInitial.json();
+        const expectedProportions = buildExpectedProportions(initialDiagData.treatment_counts);
+
         const [diagRes, analysisRes, trustRes] = await Promise.all([
           fetch(`${API_BASE_URL}/diagnostics`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
+            body: JSON.stringify({
+              ...payloadBase,
+              expected_proportions: expectedProportions,
+            }),
           }),
           fetch(`${API_BASE_URL}/analyze`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
+            body: JSON.stringify(payloadBase),
           }),
           fetch(`${API_BASE_URL}/trust-score`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              ...payload,
-              expected_proportions: null,
+              ...payloadBase,
+              expected_proportions: expectedProportions,
             }),
           }),
         ]);
@@ -182,6 +223,8 @@ function ReportPageContent() {
     prePeriodColumn,
     covariatesParam,
     covariateColumns,
+    expectedMode,
+    expectedGroup1,
   ]);
 
   const handlePrint = () => {
@@ -206,6 +249,7 @@ function ReportPageContent() {
         body: JSON.stringify({
           diagnostics,
           analysis,
+          trust_score: trust,
         }),
       });
 
@@ -248,7 +292,11 @@ function ReportPageContent() {
               timestampColumn
             )}&pre_period_column=${encodeURIComponent(
               prePeriodColumn
-            )}&covariates=${encodeURIComponent(covariateColumns.join(","))}`}
+            )}&covariates=${encodeURIComponent(
+              covariateColumns.join(",")
+            )}&expected_mode=${encodeURIComponent(
+              expectedMode
+            )}&expected_group_1=${encodeURIComponent(expectedGroup1)}`}
             className="text-sm text-slate-500 hover:text-slate-900"
           >
             ← Back to analysis

@@ -28,7 +28,37 @@ type ApplyFixesResponse = {
   new_file_id: string;
   applied_fixes: string[];
   change_summary: Record<string, number>;
+  fix_details: {
+    key: string;
+    label: string;
+    count: number;
+  }[];
+  before_summary: {
+    row_count: number;
+    duplicate_rows: number;
+    missing_treatment_rows: number | null;
+    missing_outcome_rows: number | null;
+    treatment_group_count: number;
+    treatment_groups: string[];
+  };
+  after_summary: {
+    row_count: number;
+    duplicate_rows: number;
+    missing_treatment_rows: number | null;
+    missing_outcome_rows: number | null;
+    treatment_group_count: number;
+    treatment_groups: string[];
+  };
   row_count_after_fixes: number;
+};
+
+const FIX_LABELS: Record<string, string> = {
+  normalize_empty_strings: "Normalize empty strings",
+  standardize_treatment_labels: "Standardize treatment labels",
+  coerce_binary_outcome: "Convert binary outcome values",
+  drop_duplicate_rows: "Remove duplicate rows",
+  drop_missing_treatment_rows: "Drop rows with missing treatment",
+  drop_missing_outcome_rows: "Drop rows with missing outcome",
 };
 
 function DataReadinessPageContent() {
@@ -99,7 +129,6 @@ function DataReadinessPageContent() {
     try {
       setLoading(true);
       setError("");
-      setFixResult(null);
       await runReadinessCheck(currentFileId);
     } catch (err) {
       const message =
@@ -261,20 +290,75 @@ function DataReadinessPageContent() {
             {readinessBadge()}
 
             {fixResult && (
-              <div className="rounded-2xl border border-blue-200 bg-blue-50 p-6 shadow-sm">
-                <h2 className="text-xl font-semibold text-blue-900">Fixes Applied</h2>
-                <p className="mt-2 text-blue-800">
-                  A cleaned dataset version was created and Data Readiness was rerun automatically.
-                </p>
-                <p className="mt-3 text-sm text-blue-800">
-                  <span className="font-medium">New File ID:</span> {fixResult.new_file_id}
-                </p>
-                <ul className="mt-3 list-disc pl-5 text-blue-800">
-                  {fixResult.applied_fixes.map((fix, idx) => (
-                    <li key={idx}>{fix}</li>
-                  ))}
-                </ul>
-              </div>
+              <>
+                <div className="rounded-2xl border border-blue-200 bg-blue-50 p-6 shadow-sm">
+                  <h2 className="text-xl font-semibold text-blue-900">Cleanup Impact</h2>
+                  <p className="mt-2 text-blue-800">
+                    A cleaned dataset version was created and Data Readiness was rerun automatically.
+                  </p>
+                  <p className="mt-3 text-sm text-blue-800">
+                    <span className="font-medium">New File ID:</span> {fixResult.new_file_id}
+                  </p>
+
+                  <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+                    <div className="rounded-xl bg-white/70 p-4">
+                      <p className="text-sm text-slate-500">Rows</p>
+                      <p className="mt-1 font-semibold">
+                        {fixResult.before_summary.row_count} → {fixResult.after_summary.row_count}
+                      </p>
+                    </div>
+                    <div className="rounded-xl bg-white/70 p-4">
+                      <p className="text-sm text-slate-500">Duplicate Rows</p>
+                      <p className="mt-1 font-semibold">
+                        {fixResult.before_summary.duplicate_rows} → {fixResult.after_summary.duplicate_rows}
+                      </p>
+                    </div>
+                    <div className="rounded-xl bg-white/70 p-4">
+                      <p className="text-sm text-slate-500">Missing Treatment</p>
+                      <p className="mt-1 font-semibold">
+                        {fixResult.before_summary.missing_treatment_rows ?? 0} → {fixResult.after_summary.missing_treatment_rows ?? 0}
+                      </p>
+                    </div>
+                    <div className="rounded-xl bg-white/70 p-4">
+                      <p className="text-sm text-slate-500">Missing Outcome</p>
+                      <p className="mt-1 font-semibold">
+                        {fixResult.before_summary.missing_outcome_rows ?? 0} → {fixResult.after_summary.missing_outcome_rows ?? 0}
+                      </p>
+                    </div>
+                    <div className="rounded-xl bg-white/70 p-4">
+                      <p className="text-sm text-slate-500">Treatment Groups</p>
+                      <p className="mt-1 font-semibold">
+                        {fixResult.before_summary.treatment_group_count} → {fixResult.after_summary.treatment_group_count}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                  <h2 className="text-xl font-semibold">Fix Summary</h2>
+                  <div className="mt-4 space-y-3">
+                    {fixResult.fix_details
+                      .filter((item) => item.count > 0)
+                      .map((item) => (
+                        <div
+                          key={item.key}
+                          className="rounded-xl border border-slate-200 bg-slate-50 p-4"
+                        >
+                          <p className="font-medium">{item.label}</p>
+                          <p className="mt-1 text-sm text-slate-600">
+                            Affected values/rows: {item.count}
+                          </p>
+                        </div>
+                      ))}
+
+                    {fixResult.fix_details.filter((item) => item.count > 0).length === 0 && (
+                      <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-slate-600">
+                        Selected fixes ran successfully, but no rows or values needed to be changed.
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </>
             )}
 
             <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -375,7 +459,9 @@ function DataReadinessPageContent() {
                         }))
                       }
                     />
-                    <span className="text-sm text-slate-700">{key}</span>
+                    <span className="text-sm text-slate-700">
+                      {FIX_LABELS[key] ?? key}
+                    </span>
                   </label>
                 ))}
               </div>
