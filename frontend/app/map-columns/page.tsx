@@ -238,6 +238,25 @@ function MapColumnsPageContent() {
     </div>
   );
 
+  const mappingInvalidParam =
+    result === null ? "false" : result.valid ? "false" : "true";
+
+  const dataReadinessHref = `/data-readiness?file_id=${encodeURIComponent(
+    fileId
+  )}&treatment_column=${encodeURIComponent(
+    treatmentColumn
+  )}&outcome_column=${encodeURIComponent(
+    outcomeColumn
+  )}&user_id_column=${encodeURIComponent(
+    userIdColumn
+  )}&timestamp_column=${encodeURIComponent(
+    timestampColumn
+  )}&pre_period_column=${encodeURIComponent(
+    prePeriodColumn
+  )}&covariates=${encodeURIComponent(
+    covariateColumns.join(",")
+  )}&mapping_invalid=${encodeURIComponent(mappingInvalidParam)}`;
+
   return (
     <main className="min-h-screen bg-slate-50 px-6 py-10 text-slate-900">
       <div className="mx-auto max-w-5xl">
@@ -494,19 +513,7 @@ function MapColumnsPageContent() {
 
                 <div className="mt-4">
                   <a
-                    href={`/data-readiness?file_id=${encodeURIComponent(
-                      fileId
-                    )}&treatment_column=${encodeURIComponent(
-                      treatmentColumn
-                    )}&outcome_column=${encodeURIComponent(
-                      outcomeColumn
-                    )}&user_id_column=${encodeURIComponent(
-                      userIdColumn
-                    )}&timestamp_column=${encodeURIComponent(
-                      timestampColumn
-                    )}&pre_period_column=${encodeURIComponent(
-                      prePeriodColumn
-                    )}&covariates=${encodeURIComponent(covariateColumns.join(","))}`}
+                    href={dataReadinessHref}
                     className={`inline-block rounded-xl px-5 py-3 text-white transition ${
                       result?.valid
                         ? "bg-emerald-700 hover:bg-emerald-600"

@@ -21,6 +21,32 @@ type DiagnosticsResponse = {
   warnings: string[];
 };
 
+type AdjustedAnalysis = {
+  status: "available" | "unavailable";
+  method: string | null;
+  covariates_used: string[];
+  dropped_covariates: string[];
+  warnings: string[];
+  unavailable_reason: string | null;
+  coefficient: number | null;
+  effect: {
+    absolute_lift: number | null;
+    relative_lift: number | null;
+    adjusted_control_rate?: number;
+    adjusted_treatment_rate?: number;
+  };
+  test_statistic: {
+    test_name: string | null;
+    stat: number | null;
+    p_value: number | null;
+  };
+  confidence_interval_95: {
+    low: number | null;
+    high: number | null;
+  };
+  note: string | null;
+} | null;
+
 type AnalysisResponse = {
   metric_type: "binary" | "continuous";
   outcome_column?: string;
@@ -29,7 +55,6 @@ type AnalysisResponse = {
     treatment_label: string;
   };
   sample_sizes: Record<string, number>;
-  outcome_values?: Record<string, number>;
   outcome_rates?: Record<string, number>;
   outcome_means?: Record<string, number>;
   effect: {
@@ -45,6 +70,7 @@ type AnalysisResponse = {
     low: number;
     high: number;
   };
+  adjusted_analysis?: AdjustedAnalysis;
   interpretation: string;
 };
 
@@ -527,6 +553,94 @@ function ReportPageContent() {
                   </div>
                 </div>
               </section>
+
+              {analysis.adjusted_analysis && (
+                <section>
+                  <h2 className="text-xl font-semibold">Adjusted Analysis</h2>
+
+                  {analysis.adjusted_analysis.status === "available" ? (
+                    <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                      <div className="rounded-xl bg-slate-100 p-4">
+                        <p className="text-sm text-slate-500">Method</p>
+                        <p className="mt-1 font-semibold">{analysis.adjusted_analysis.method}</p>
+                      </div>
+                      <div className="rounded-xl bg-slate-100 p-4">
+                        <p className="text-sm text-slate-500">Covariates Used</p>
+                        <p className="mt-1 font-semibold">
+                          {analysis.adjusted_analysis.covariates_used.join(", ")}
+                        </p>
+                      </div>
+                      <div className="rounded-xl bg-slate-100 p-4">
+                        <p className="text-sm text-slate-500">Adjusted Absolute Lift</p>
+                        <p className="mt-1 font-semibold">
+                          {analysis.metric_type === "binary"
+                            ? `${((analysis.adjusted_analysis.effect.absolute_lift ?? 0) * 100).toFixed(2)} pp`
+                            : (analysis.adjusted_analysis.effect.absolute_lift ?? 0).toFixed(2)}
+                        </p>
+                      </div>
+                      <div className="rounded-xl bg-slate-100 p-4">
+                        <p className="text-sm text-slate-500">Adjusted P-value</p>
+                        <p className="mt-1 font-semibold">
+                          {analysis.adjusted_analysis.test_statistic.p_value}
+                        </p>
+                      </div>
+
+                      {analysis.adjusted_analysis.dropped_covariates.length > 0 && (
+                        <div className="rounded-xl border border-yellow-200 bg-yellow-50 p-4 text-yellow-800 sm:col-span-2">
+                          <p className="font-medium">Dropped Covariates</p>
+                          <p className="mt-1">
+                            {analysis.adjusted_analysis.dropped_covariates.join(", ")}
+                          </p>
+                        </div>
+                      )}
+
+                      {analysis.adjusted_analysis.warnings.length > 0 && (
+                        <div className="rounded-xl border border-yellow-200 bg-yellow-50 p-4 text-yellow-800 sm:col-span-2">
+                          <p className="font-medium">Adjustment Warnings</p>
+                          <ul className="mt-2 list-disc pl-5">
+                            {analysis.adjusted_analysis.warnings.map((warning, idx) => (
+                              <li key={idx}>{warning}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
+                      <div className="rounded-xl bg-slate-100 p-4 sm:col-span-2">
+                        <p className="text-sm text-slate-500">Model Note</p>
+                        <p className="mt-1 font-semibold">{analysis.adjusted_analysis.note}</p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="mt-4 rounded-xl border border-yellow-200 bg-yellow-50 p-4 text-yellow-800">
+                      <p className="font-medium">Adjusted analysis was not available.</p>
+                      <p className="mt-2">
+                        {analysis.adjusted_analysis.unavailable_reason ??
+                          "No usable covariates were available or the model could not be fit safely."}
+                      </p>
+
+                      {analysis.adjusted_analysis.dropped_covariates.length > 0 && (
+                        <div className="mt-3">
+                          <p className="font-medium">Dropped Covariates</p>
+                          <p className="mt-1">
+                            {analysis.adjusted_analysis.dropped_covariates.join(", ")}
+                          </p>
+                        </div>
+                      )}
+
+                      {analysis.adjusted_analysis.warnings.length > 0 && (
+                        <div className="mt-3">
+                          <p className="font-medium">Details</p>
+                          <ul className="mt-2 list-disc pl-5">
+                            {analysis.adjusted_analysis.warnings.map((warning, idx) => (
+                              <li key={idx}>{warning}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </section>
+              )}
 
               <section>
                 <h2 className="text-xl font-semibold">Interpretation</h2>

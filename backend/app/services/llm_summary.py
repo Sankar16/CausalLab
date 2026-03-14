@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 from typing import Any
 
@@ -18,9 +19,8 @@ def generate_llm_summary(payload: dict[str, Any]) -> dict[str, str]:
     trust = payload.get("trust_score")
 
     prompt = f"""
-You are writing a stakeholder-facing experiment summary for an A/B test review platform.
+You are writing a stakeholder-facing experiment summary for an A/B testing review platform.
 
-Your task:
 Write 3 sections:
 1. executive_summary
 2. reliability_note
@@ -28,25 +28,25 @@ Write 3 sections:
 
 Rules:
 - Write in plain business English
-- Be precise and short
-- Separate statistical result from experiment trust
+- Be precise and concise
+- Separate statistical result from trustworthiness
 - Mention whether the result is statistically significant
 - Mention the confidence interval
-- Mention key trust risks such as SRM or missing outcomes
+- Mention trust risks such as SRM or missing outcomes
+- If adjusted analysis is available, mention whether it is directionally consistent with the unadjusted result
+- If adjusted analysis is unavailable, briefly explain that covariate-adjusted analysis could not be fit safely
 - If trust information is available, use it explicitly
-- Recommendation should be practical and decision-oriented
-- Do not use markdown
 - Return valid JSON only with keys:
   executive_summary, reliability_note, recommendation
 
 Diagnostics:
-{diagnostics}
+{json.dumps(diagnostics)}
 
 Analysis:
-{analysis}
+{json.dumps(analysis)}
 
 Trust score:
-{trust}
+{json.dumps(trust)}
 """
 
     response = client.chat.completions.create(
@@ -67,9 +67,8 @@ Trust score:
 
     content = response.choices[0].message.content
     if not content:
-      raise ValueError("LLM returned empty content.")
+        raise ValueError("LLM returned empty content.")
 
-    import json
     parsed = json.loads(content)
 
     return {

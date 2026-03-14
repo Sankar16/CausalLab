@@ -71,6 +71,7 @@ function DataReadinessPageContent() {
   const timestampColumn = searchParams.get("timestamp_column") || "";
   const prePeriodColumn = searchParams.get("pre_period_column") || "";
   const covariatesParam = searchParams.get("covariates") || "";
+  const mappingWasInvalid = searchParams.get("mapping_invalid") === "true";
 
   const covariateColumns = covariatesParam
     .split(",")
@@ -228,6 +229,7 @@ function DataReadinessPageContent() {
   };
 
   const canContinueToDiagnostics = result && result.readiness_status !== "not_ready";
+  const cleanedMappingRecovered = mappingWasInvalid && !!fixResult && !!result && result.readiness_status !== "not_ready";
 
   return (
     <main className="min-h-screen bg-slate-50 px-6 py-10 text-slate-900">
@@ -261,13 +263,65 @@ function DataReadinessPageContent() {
             <span className="font-medium">Current File ID:</span> {currentFileId || "Not found"}
           </p>
           <p>
-            <span className="font-medium">Treatment Column:</span>{" "}
-            {treatmentColumn || "Not found"}
+            <span className="font-medium">Treatment Column:</span> {treatmentColumn || "Not found"}
           </p>
           <p>
             <span className="font-medium">Outcome Column:</span> {outcomeColumn || "Not found"}
           </p>
         </div>
+
+        <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="flex items-center gap-2">
+            <h2 className="text-xl font-semibold">Selected Mapping</h2>
+            <InfoTooltip text="These are the columns currently being carried into readiness, diagnostics, and analysis." />
+          </div>
+
+          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+            <div className="rounded-xl bg-slate-100 p-4">
+              <p className="text-sm text-slate-500">Treatment</p>
+              <p className="mt-1 font-semibold">{treatmentColumn || "Not selected"}</p>
+            </div>
+            <div className="rounded-xl bg-slate-100 p-4">
+              <p className="text-sm text-slate-500">Outcome</p>
+              <p className="mt-1 font-semibold">{outcomeColumn || "Not selected"}</p>
+            </div>
+            <div className="rounded-xl bg-slate-100 p-4">
+              <p className="text-sm text-slate-500">User ID</p>
+              <p className="mt-1 font-semibold">{userIdColumn || "Not selected"}</p>
+            </div>
+            <div className="rounded-xl bg-slate-100 p-4">
+              <p className="text-sm text-slate-500">Timestamp</p>
+              <p className="mt-1 font-semibold">{timestampColumn || "Not selected"}</p>
+            </div>
+            <div className="rounded-xl bg-slate-100 p-4 sm:col-span-2">
+              <p className="text-sm text-slate-500">Covariates</p>
+              <p className="mt-1 font-semibold">
+                {covariateColumns.length > 0 ? covariateColumns.join(", ") : "None selected"}
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+            <p className="text-sm text-slate-500">Mapping Status</p>
+            <p className="mt-1 font-semibold">
+              {mappingWasInvalid ? "Original mapping had issues" : "Mapping is usable for the current flow"}
+            </p>
+            <p className="mt-2 text-sm text-slate-600">
+              {mappingWasInvalid
+                ? "You entered Data Readiness with a mapping that had validation issues. This page helps determine whether safe fixes can make the dataset usable for analysis."
+                : "The currently selected mapping is what CausalLab will use for readiness checks and downstream analysis."}
+            </p>
+          </div>
+        </div>
+
+        {cleanedMappingRecovered && (
+          <div className="mt-6 rounded-2xl border border-blue-200 bg-blue-50 p-6 shadow-sm">
+            <h2 className="text-xl font-semibold text-blue-900">Mapping Became Usable After Cleanup</h2>
+            <p className="mt-2 text-blue-800">
+              The original mapping had issues, but safe fixes produced a cleaned dataset that is now compatible with the current 2-group analysis flow.
+            </p>
+          </div>
+        )}
 
         <div className="mt-6">
           <button

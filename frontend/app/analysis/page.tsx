@@ -23,6 +23,32 @@ type DiagnosticsResponse = {
   warnings: string[];
 };
 
+type AdjustedAnalysis = {
+  status: "available" | "unavailable";
+  method: string | null;
+  covariates_used: string[];
+  dropped_covariates: string[];
+  warnings: string[];
+  unavailable_reason: string | null;
+  coefficient: number | null;
+  effect: {
+    absolute_lift: number | null;
+    relative_lift: number | null;
+    adjusted_control_rate?: number;
+    adjusted_treatment_rate?: number;
+  };
+  test_statistic: {
+    test_name: string | null;
+    stat: number | null;
+    p_value: number | null;
+  };
+  confidence_interval_95: {
+    low: number | null;
+    high: number | null;
+  };
+  note: string | null;
+} | null;
+
 type AnalysisResponse = {
   metric_type: "binary" | "continuous";
   outcome_column?: string;
@@ -31,7 +57,6 @@ type AnalysisResponse = {
     treatment_label: string;
   };
   sample_sizes: Record<string, number>;
-  outcome_values?: Record<string, number>;
   outcome_rates?: Record<string, number>;
   outcome_means?: Record<string, number>;
   effect: {
@@ -47,6 +72,7 @@ type AnalysisResponse = {
     low: number;
     high: number;
   };
+  adjusted_analysis?: AdjustedAnalysis;
   interpretation: string;
 };
 
@@ -166,7 +192,7 @@ function AnalysisPageContent() {
           setTrust(trustData);
         }
       } catch {
-        // Keep page usable even if diagnostics/trust fetch fails
+        // keep page usable
       }
     };
 
@@ -274,6 +300,33 @@ function AnalysisPageContent() {
         )}]`
     : "";
 
+  const adjusted = result?.adjusted_analysis ?? null;
+
+  const adjustedAbsoluteText =
+    adjusted?.status === "available" && adjusted.effect.absolute_lift !== null
+      ? result?.metric_type === "binary"
+        ? `${(adjusted.effect.absolute_lift * 100).toFixed(2)} pp`
+        : adjusted.effect.absolute_lift.toFixed(2)
+      : "N/A";
+
+  const adjustedRelativeText =
+    adjusted?.status === "available" && adjusted.effect.relative_lift !== null
+      ? `${(adjusted.effect.relative_lift * 100).toFixed(2)}%`
+      : "N/A";
+
+  const adjustedCiText =
+    adjusted?.status === "available" &&
+    adjusted.confidence_interval_95.low !== null &&
+    adjusted.confidence_interval_95.high !== null
+      ? result?.metric_type === "binary"
+        ? `[${adjusted.confidence_interval_95.low.toFixed(2)}, ${adjusted.confidence_interval_95.high.toFixed(
+            2
+          )}] log-odds`
+        : `[${adjusted.confidence_interval_95.low.toFixed(2)}, ${adjusted.confidence_interval_95.high.toFixed(
+            2
+          )}]`
+      : "N/A";
+
   return (
     <main className="min-h-screen bg-slate-50 px-6 py-10 text-slate-900">
       <div className="mx-auto max-w-6xl">
@@ -302,19 +355,13 @@ function AnalysisPageContent() {
 
         <h1 className="mt-4 text-3xl font-bold">A/B Test Analysis</h1>
         <p className="mt-2 text-slate-600">
-          Estimate lift, significance, and confidence intervals for the selected experiment outcome.
+          Estimate lift, significance, confidence intervals, and adjusted treatment effects.
         </p>
 
         <div className="mt-4 rounded-lg bg-slate-100 p-4 text-sm text-slate-700">
-          <p>
-            <span className="font-medium">File ID:</span> {fileId || "Not found"}
-          </p>
-          <p>
-            <span className="font-medium">Treatment Column:</span> {treatmentColumn || "Not found"}
-          </p>
-          <p>
-            <span className="font-medium">Outcome Column:</span> {outcomeColumn || "Not found"}
-          </p>
+          <p><span className="font-medium">File ID:</span> {fileId || "Not found"}</p>
+          <p><span className="font-medium">Treatment Column:</span> {treatmentColumn || "Not found"}</p>
+          <p><span className="font-medium">Outcome Column:</span> {outcomeColumn || "Not found"}</p>
         </div>
 
         {trust && (
@@ -420,14 +467,14 @@ function AnalysisPageContent() {
               </div>
             </div>
 
-            <div className="grid gap-6 lg:grid-cols-3">
+            <div className="grid gap-6 lg:grid-cols-2">
               <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
                 <div className="flex items-center gap-2">
-                  <h2 className="text-xl font-semibold">Effect Size</h2>
-                  <InfoTooltip text="Absolute lift is the raw change between treatment and control. Relative lift is the percentage change relative to control." />
+                  <h2 className="text-xl font-semibold">Unadjusted Analysis</h2>
+                  <InfoTooltip text="This is the raw treatment-versus-control comparison without covariate adjustment." />
                 </div>
 
-                <div className="mt-4 space-y-4">
+                <div className="mt-4 grid gap-4 sm:grid-cols-2">
                   <div className="rounded-xl bg-slate-100 p-4">
                     <p className="text-sm text-slate-500">Absolute Lift</p>
                     <p className="mt-1 text-xl font-semibold">{absoluteLiftText}</p>
@@ -436,42 +483,123 @@ function AnalysisPageContent() {
                     <p className="text-sm text-slate-500">Relative Lift</p>
                     <p className="mt-1 text-xl font-semibold">{relativeLiftText}</p>
                   </div>
+                  <div className="rounded-xl bg-slate-100 p-4">
+                    <p className="text-sm text-slate-500">P-value</p>
+                    <p className="mt-1 text-xl font-semibold">{result.test_statistic.p_value}</p>
+                  </div>
+                  <div className="rounded-xl bg-slate-100 p-4">
+                    <p className="text-sm text-slate-500">95% Confidence Interval</p>
+                    <p className="mt-1 text-xl font-semibold">{ciText}</p>
+                  </div>
                 </div>
               </div>
 
-              <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm lg:col-span-2">
+              <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
                 <div className="flex items-center gap-2">
-                  <h2 className="text-xl font-semibold">Confidence Interval</h2>
-                  <InfoTooltip text="The confidence interval shows the plausible range for the treatment effect." />
+                  <h2 className="text-xl font-semibold">Adjusted Analysis</h2>
+                  <InfoTooltip text="Adjusted analysis accounts for selected pre-treatment covariates to improve precision." />
                 </div>
 
-                <div className="mt-4 grid gap-4 sm:grid-cols-3">
-                  <div className="rounded-xl bg-slate-100 p-4">
-                    <p className="text-sm text-slate-500">Lower Bound</p>
-                    <p className="mt-1 text-xl font-semibold">
-                      {result.metric_type === "binary"
-                        ? `${(result.confidence_interval_95.low * 100).toFixed(2)} pp`
-                        : result.confidence_interval_95.low.toFixed(2)}
-                    </p>
-                  </div>
-                  <div className="rounded-xl bg-slate-100 p-4">
-                    <p className="text-sm text-slate-500">Point Estimate</p>
-                    <p className="mt-1 text-xl font-semibold">{absoluteLiftText}</p>
-                  </div>
-                  <div className="rounded-xl bg-slate-100 p-4">
-                    <p className="text-sm text-slate-500">Upper Bound</p>
-                    <p className="mt-1 text-xl font-semibold">
-                      {result.metric_type === "binary"
-                        ? `${(result.confidence_interval_95.high * 100).toFixed(2)} pp`
-                        : result.confidence_interval_95.high.toFixed(2)}
-                    </p>
-                  </div>
-                </div>
+                {adjusted?.status === "available" ? (
+                  <>
+                    <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                      <div className="rounded-xl bg-slate-100 p-4">
+                        <p className="text-sm text-slate-500">Adjusted Absolute Lift</p>
+                        <p className="mt-1 text-xl font-semibold">{adjustedAbsoluteText}</p>
+                      </div>
+                      <div className="rounded-xl bg-slate-100 p-4">
+                        <p className="text-sm text-slate-500">Adjusted Relative Lift</p>
+                        <p className="mt-1 text-xl font-semibold">{adjustedRelativeText}</p>
+                      </div>
+                      <div className="rounded-xl bg-slate-100 p-4">
+                        <p className="text-sm text-slate-500">Adjusted P-value</p>
+                        <p className="mt-1 text-xl font-semibold">
+                          {adjusted.test_statistic.p_value}
+                        </p>
+                      </div>
+                      <div className="rounded-xl bg-slate-100 p-4">
+                        <p className="text-sm text-slate-500">Adjusted 95% CI</p>
+                        <p className="mt-1 text-xl font-semibold">{adjustedCiText}</p>
+                      </div>
+                    </div>
 
-                <div className="mt-4 rounded-xl bg-slate-50 p-4">
-                  <p className="text-sm text-slate-500">95% Confidence Interval</p>
-                  <p className="mt-1 text-lg font-semibold">{ciText}</p>
-                </div>
+                    {result.metric_type === "binary" &&
+                      adjusted.effect.adjusted_control_rate !== undefined &&
+                      adjusted.effect.adjusted_treatment_rate !== undefined && (
+                        <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                          <div className="rounded-xl bg-slate-50 p-4">
+                            <p className="text-sm text-slate-500">Adjusted Control Rate</p>
+                            <p className="mt-1 font-semibold">
+                              {(adjusted.effect.adjusted_control_rate * 100).toFixed(2)}%
+                            </p>
+                          </div>
+                          <div className="rounded-xl bg-slate-50 p-4">
+                            <p className="text-sm text-slate-500">Adjusted Treatment Rate</p>
+                            <p className="mt-1 font-semibold">
+                              {(adjusted.effect.adjusted_treatment_rate * 100).toFixed(2)}%
+                            </p>
+                          </div>
+                        </div>
+                      )}
+
+                    <div className="mt-4 rounded-xl bg-slate-50 p-4">
+                      <p className="text-sm text-slate-500">Covariates Used</p>
+                      <p className="mt-1 font-semibold">
+                        {adjusted.covariates_used.join(", ")}
+                      </p>
+                    </div>
+
+                    {adjusted.dropped_covariates.length > 0 && (
+                      <div className="mt-4 rounded-xl border border-yellow-200 bg-yellow-50 p-4 text-yellow-800">
+                        <p className="font-medium">Dropped Covariates</p>
+                        <p className="mt-1">{adjusted.dropped_covariates.join(", ")}</p>
+                      </div>
+                    )}
+
+                    {adjusted.warnings.length > 0 && (
+                      <div className="mt-4 rounded-xl border border-yellow-200 bg-yellow-50 p-4 text-yellow-800">
+                        <p className="font-medium">Adjustment Warnings</p>
+                        <ul className="mt-2 list-disc pl-5">
+                          {adjusted.warnings.map((warning, idx) => (
+                            <li key={idx}>{warning}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    <div className="mt-4 rounded-xl bg-slate-50 p-4">
+                      <p className="text-sm text-slate-500">Method</p>
+                      <p className="mt-1 font-semibold">{adjusted.method}</p>
+                      <p className="mt-2 text-sm text-slate-600">{adjusted.note}</p>
+                    </div>
+                  </>
+                ) : (
+                  <div className="mt-4 rounded-xl border border-yellow-200 bg-yellow-50 p-4 text-yellow-800">
+                    <p className="font-medium">Adjusted analysis was not available.</p>
+                    <p className="mt-2">
+                      {adjusted?.unavailable_reason ??
+                        "No usable covariates were available or the model could not be fit safely."}
+                    </p>
+
+                    {adjusted?.dropped_covariates && adjusted.dropped_covariates.length > 0 && (
+                      <div className="mt-3">
+                        <p className="font-medium">Dropped Covariates</p>
+                        <p className="mt-1">{adjusted.dropped_covariates.join(", ")}</p>
+                      </div>
+                    )}
+
+                    {adjusted?.warnings && adjusted.warnings.length > 0 && (
+                      <div className="mt-3">
+                        <p className="font-medium">Details</p>
+                        <ul className="mt-2 list-disc pl-5">
+                          {adjusted.warnings.map((warning, idx) => (
+                            <li key={idx}>{warning}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
 
