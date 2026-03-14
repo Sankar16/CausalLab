@@ -268,10 +268,12 @@ def _sanitize_design_matrix(
     all_null_cols = [col for col in X_clean.columns if X_clean[col].isna().all()]
     if all_null_cols:
         X_clean = X_clean.drop(columns=all_null_cols)
-        dropped_columns.extend(all_null_cols)
-        warnings.append(
-            f"Dropped non-numeric or unusable covariate columns after coercion: {', '.join(all_null_cols)}."
-        )
+        filtered = [col for col in all_null_cols if col != "const"]
+        if filtered:
+            dropped_columns.extend(filtered)
+            warnings.append(
+                f"Dropped non-numeric or unusable covariate columns after coercion: {', '.join(filtered)}."
+            )
 
     valid_rows = ~(X_clean.isna().any(axis=1) | y.isna())
     dropped_rows = int((~valid_rows).sum())
@@ -287,14 +289,34 @@ def _sanitize_design_matrix(
         constant_cols = [col for col in X_clean.columns if X_clean[col].nunique(dropna=False) <= 1]
         if constant_cols:
             X_clean = X_clean.drop(columns=constant_cols)
-            dropped_columns.extend(constant_cols)
-            warnings.append(
-                f"Dropped constant covariate columns before model fit: {', '.join(constant_cols)}."
-            )
+            filtered = [col for col in constant_cols if col != "const"]
+            if filtered:
+                dropped_columns.extend(filtered)
+                warnings.append(
+                    f"Dropped constant covariate columns before model fit: {', '.join(filtered)}."
+                )
 
     X_clean = X_clean.astype(float)
 
     return X_clean, y_clean, dropped_columns, warnings
+
+
+def _friendly_model_error(exc: Exception) -> str:
+    message = str(exc).strip()
+
+    if "Singular matrix" in message:
+        return (
+            "Adjusted model could not be fit because the selected covariates were redundant or "
+            "highly collinear. Try fewer covariates or remove overlapping categorical variables."
+        )
+
+    if "Pandas data cast to numpy dtype of object" in message:
+        return (
+            "Adjusted model could not be fit because one or more selected covariates could not be "
+            "safely converted into a numeric design matrix."
+        )
+
+    return f"Adjusted model could not be fit safely: {message}"
 
 
 def _build_unavailable_adjusted_result(
@@ -342,7 +364,7 @@ def _adjusted_binary_result(
 
     if not used_covariates or X_cov.shape[1] == 0:
         return _build_unavailable_adjusted_result(
-            reason="No eligible covariates remained after preprocessing.",
+            reason="No eligible covariates remained after preprocessing. Try selecting fewer or more clearly pre-treatment covariates.",
             used_covariates=[],
             dropped_covariates=dropped_covariates,
             warnings=prep_warnings,
@@ -376,7 +398,7 @@ def _adjusted_binary_result(
 
     if X.shape[1] <= 1:
         return _build_unavailable_adjusted_result(
-            reason="No usable covariate columns remained after numeric coercion.",
+            reason="No usable covariate columns remained after numeric coercion. Try fewer covariates.",
             used_covariates=[],
             dropped_covariates=dropped_covariates,
             warnings=all_warnings,
@@ -386,7 +408,7 @@ def _adjusted_binary_result(
         model = sm.Logit(y, X).fit(disp=False, maxiter=200)
     except Exception as exc:
         return _build_unavailable_adjusted_result(
-            reason=f"Adjusted logistic model did not converge safely: {str(exc)}",
+            reason=_friendly_model_error(exc),
             used_covariates=used_covariates,
             dropped_covariates=dropped_covariates,
             warnings=all_warnings,
@@ -456,7 +478,7 @@ def _adjusted_continuous_result(
 
     if not used_covariates or X_cov.shape[1] == 0:
         return _build_unavailable_adjusted_result(
-            reason="No eligible covariates remained after preprocessing.",
+            reason="No eligible covariates remained after preprocessing. Try selecting fewer or more clearly pre-treatment covariates.",
             used_covariates=[],
             dropped_covariates=dropped_covariates,
             warnings=prep_warnings,
@@ -490,7 +512,7 @@ def _adjusted_continuous_result(
 
     if X.shape[1] <= 1:
         return _build_unavailable_adjusted_result(
-            reason="No usable covariate columns remained after numeric coercion.",
+            reason="No usable covariate columns remained after numeric coercion. Try fewer covariates.",
             used_covariates=[],
             dropped_covariates=dropped_covariates,
             warnings=all_warnings,
@@ -500,7 +522,7 @@ def _adjusted_continuous_result(
         model = sm.OLS(y, X).fit()
     except Exception as exc:
         return _build_unavailable_adjusted_result(
-            reason=f"Adjusted OLS model could not be fit safely: {str(exc)}",
+            reason=_friendly_model_error(exc),
             used_covariates=used_covariates,
             dropped_covariates=dropped_covariates,
             warnings=all_warnings,

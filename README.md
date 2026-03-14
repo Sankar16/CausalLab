@@ -1,6 +1,6 @@
 # CausalLab — Experimentation Review and A/B Test Analysis Platform
 
-CausalLab is a full-stack platform for reviewing randomized A/B test datasets with diagnostics, statistical analysis, trust-aware reporting, and LLM-generated stakeholder summaries.
+CausalLab is a full-stack platform for reviewing randomized A/B test datasets with diagnostics, statistical analysis, trust-aware reporting, safe data cleanup, covariate-adjusted analysis, sample datasets, and LLM-generated stakeholder summaries.
 
 ## Overview
 
@@ -9,7 +9,7 @@ Teams often focus only on p-values and lift, even when the experiment itself may
 - **statistical effect estimation**
 - **experiment trustworthiness**
 
-The platform helps users upload an experiment dataset, map treatment and outcome columns, validate the setup, run diagnostics, estimate treatment effects, and generate stakeholder-friendly reports.
+The platform helps users upload an experiment dataset, map treatment and outcome columns, validate the setup, run diagnostics, estimate treatment effects, apply safe fixes when needed, and generate stakeholder-friendly reports.
 
 ## Key Features
 
@@ -18,36 +18,83 @@ The platform helps users upload an experiment dataset, map treatment and outcome
 - Profile dataset schema and preview rows
 - Dynamically map treatment, outcome, ID, timestamp, pre-period, and covariate columns
 - Validate column mapping before analysis
+- Carry mapping status forward into Data Readiness
+
+### Data Readiness and Safe Cleanup
+- Check for:
+  - duplicate rows
+  - missing treatment values
+  - missing outcome values
+  - invalid treatment group structure
+  - outcome type problems
+  - binary outcome validity
+  - timestamp parse issues
+  - covariate usability
+- Apply safe cleanup fixes such as:
+  - normalize empty strings
+  - standardize treatment labels
+  - coerce binary outcome values
+  - remove duplicate rows
+  - drop rows with missing treatment
+  - drop rows with missing outcome
+- Automatically re-run readiness checks on the cleaned dataset
+- Show cleanup impact before continuing to diagnostics
 
 ### Experiment Diagnostics
 - Treatment group counts
 - Sample Ratio Mismatch (SRM) detection
 - Missing outcome checks by group
 - Raw outcome summaries by group
+- Expected-vs-observed treatment allocation review
 - Trust-aware warnings carried into downstream reporting
 
 ### Statistical Analysis
+
 #### Binary outcomes (for example: `converted`)
 - Conversion rates by group
 - Absolute lift
 - Relative lift
 - Two-proportion z-test
 - 95% confidence interval
+- Optional covariate-adjusted analysis with logistic regression
 
 #### Continuous outcomes (for example: `revenue`)
 - Mean outcome by group
 - Absolute lift
 - Relative lift
-- Welch’s t-test
+- Difference-in-means testing
 - 95% confidence interval
+- Optional covariate-adjusted analysis with OLS regression
 
-### Reporting and Stakeholder Communication
+### Adjusted Analysis
+- Supports pre-treatment covariates
+- Shows:
+  - adjusted lift
+  - adjusted p-value
+  - adjusted confidence interval
+  - covariates used
+  - dropped covariates when the model cannot safely use them
+  - warnings when adjustment is unstable
+- Safely declines adjusted analysis when covariates are redundant, highly collinear, or otherwise unsuitable
+
+### Trust-Aware Reporting
+- Trust score summarizing experiment reliability
 - Trust-aware analysis page
 - Printable report page
 - LLM-generated:
   - Executive Summary
   - Reliability Note
   - Recommendation
+
+### Sample Datasets
+Built-in sample datasets are available directly on the Upload page so reviewers can try the platform without bringing their own file.
+
+Included examples:
+- `clean_ab_data.csv`
+- `messy_ab_test_dataset.csv`
+- `flawed_ab_data.csv`
+- `marketing_AB.csv`
+- `ab_data.csv`
 
 ## Why It Matters
 
@@ -71,7 +118,9 @@ That distinction is one of the most important design choices in the project.
 - FastAPI
 - Python
 - pandas
+- NumPy
 - SciPy
+- statsmodels
 
 ### LLM Layer
 - OpenAI API
@@ -98,6 +147,8 @@ CausalLab/
 │   ├── app/
 │   ├── components/
 │   ├── lib/
+│   ├── public/
+│   │   └── sample-datasets/
 │   └── package.json
 ├── data/
 │   └── generated/
@@ -106,14 +157,17 @@ CausalLab/
 
 ## End-to-End Workflow
 
-1. Upload a CSV dataset
+1. Upload a CSV dataset or load a built-in sample dataset
 2. Profile schema and preview data
 3. Map treatment, outcome, ID, timestamp, pre-period, and covariate columns
 4. Validate the mapping
-5. Run experiment diagnostics
-6. Run A/B analysis
-7. Open printable report
-8. Generate stakeholder-facing executive summary with the LLM layer
+5. Run Data Readiness checks
+6. Apply safe fixes if needed
+7. Run experiment diagnostics
+8. Run A/B analysis
+9. Review trust score and adjusted vs unadjusted results
+10. Open printable report
+11. Generate stakeholder-facing executive summary with the LLM layer
 
 ## Evaluation Strategy
 
@@ -126,10 +180,18 @@ Used to validate the expected “happy path”:
 - statistically significant positive effect
 - no major warnings
 
+### Messy synthetic dataset
+Used to validate:
+- mapping issues
+- readiness failures
+- safe cleanup workflow
+- automatic re-evaluation after fixes
+- adjusted analysis with baseline covariates
+
 ### Flawed synthetic dataset
 Used to stress-test experiment trustworthiness:
 - severe treatment/control imbalance
-- missing outcomes concentrated in one group
+- missing outcomes or structural issues
 - significant-looking treatment effect
 - strong warnings that reduce confidence in the result
 
@@ -145,7 +207,7 @@ That trust-aware distinction is a central part of the project design.
 
 CausalLab currently supports **causal inference in the randomized experiment setting**.
 
-Because A/B tests assign treatment randomly, differences in outcomes can be interpreted causally if experiment diagnostics support validity. The current version does **not yet** support full observational causal inference methods such as:
+Because A/B tests assign treatment randomly, differences in outcomes can be interpreted causally if experiment diagnostics support validity. The current version does **not** support full observational causal inference methods such as:
 
 - propensity score matching
 - inverse probability weighting
@@ -157,8 +219,6 @@ So the most accurate description is:
 
 ## Live Demo
 
-Replace these with your deployed URLs:
-
 - **Frontend:** `https://causal-lab.vercel.app`
 - **Backend API Docs:** `https://causallab.onrender.com/docs`
 
@@ -166,8 +226,9 @@ Replace these with your deployed URLs:
 
 - Review a randomized experiment before presenting results to stakeholders
 - Detect SRM and missing-outcome issues before trusting a lift estimate
-- Compare binary and continuous treatment effects from the same platform
-- Generate a printable report for technical and non-technical audiences
+- Compare adjusted and unadjusted treatment effects from the same platform
+- Demonstrate why statistically significant does not always mean decision-ready
+- Generate printable reports for technical and non-technical audiences
 
 ## Local Setup
 
@@ -263,28 +324,35 @@ FRONTEND_URL=https://your-vercel-url.vercel.app
 ## Screenshots
 
 ![Upload](docs/screenshots/upload.png)
-![Mapping](docs/screenshots/mapping.png)
-![Validation](docs/screenshots/validation.png)
-![Diagnostics](docs/screenshots/diagnostics.png)
-![Analysis](docs/screenshots/analysis.png)
+![Mapping1](docs/screenshots/mapping_1.png)
+![Mapping2](docs/screenshots/mapping_2.png)
+![Data Readiness1](docs/screenshots/data-readiness_1.png)
+![Data Readiness2](docs/screenshots/data-readiness_2.png)
+![Diagnostics1](docs/screenshots/diagnostics_1.png)
+![Diagnostics2](docs/screenshots/diagnostics_2.png)
+![Diagnostics3](docs/screenshots/diagnostics_3.png)
+![Diagnostics4](docs/screenshots/diagnostics_4.png)
+![Analysis1](docs/screenshots/analysis_1.png)
+![Analysis2](docs/screenshots/analysis_2.png)
 ![Executive Summary](docs/screenshots/executive-summary.png)
-![Report](docs/screenshots/report.png)
 
 ## Limitations
 
 - Designed primarily for randomized A/B test datasets
-- Does not yet support full observational causal inference workflows
+- Does not support full observational causal inference workflows yet
 - Uploaded files are stored on the deployed backend instance for MVP simplicity
 - LLM reporting quality depends on prompt design and structured inputs
+- Binary adjusted-analysis confidence intervals are currently presented on the model coefficient scale (log-odds), with probability-scale lift shown separately for readability
 
 ## Future Improvements
 
-- Covariate-adjusted treatment effect estimation
-- Trust score / experiment severity score
-- Rule-based decision labels
-- Real-world dataset benchmarking
-- Observational causal inference mode
-- Richer PDF export and formatting
+- better mixed-evidence recommendation logic when adjusted and unadjusted analyses disagree
+- subgroup analysis
+- smarter covariate recommendations
+- richer export formatting
+- observational causal inference mode
+- final chart artifact cleanup
+
 
 ## License
 
