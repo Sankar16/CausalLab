@@ -6,19 +6,6 @@ import InfoTooltip from "@/components/InfoTooltip";
 import { API_BASE_URL } from "@/lib/api";
 import MetricComparisonChart from "@/components/charts/MetricComparisonChart";
 import TrustScoreCard from "@/components/TrustScoreCard";
-import {
-  ResponsiveContainer,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ReferenceLine,
-  ScatterChart,
-  Scatter,
-  ZAxis,
-} from "recharts";
 
 type DiagnosticsResponse = {
   treatment_counts: Record<string, number>;
@@ -79,111 +66,6 @@ type TrustScoreResponse = {
   recommended_next_step: string;
 };
 
-function AbsoluteLiftChart({
-  metricType,
-  absoluteLift,
-}: {
-  metricType: "binary" | "continuous";
-  absoluteLift: number;
-}) {
-  const displayValue = metricType === "binary" ? absoluteLift * 100 : absoluteLift;
-  const minDomain = Math.min(0, displayValue * 1.15);
-  const maxDomain = Math.max(0, displayValue * 1.15);
-
-  const data = [{ name: "Absolute Lift", value: displayValue }];
-
-  const formatter = (value: number) =>
-    metricType === "binary" ? `${value.toFixed(2)} pp` : value.toFixed(2);
-
-  return (
-    <div className="h-72 w-full">
-      <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={data} margin={{ top: 16, right: 16, left: 0, bottom: 8 }}>
-          <CartesianGrid strokeDasharray="3 3" />
-          <XAxis dataKey="name" />
-          <YAxis domain={[minDomain, maxDomain]} tickFormatter={(value) => formatter(Number(value))} />
-          <ReferenceLine y={0} stroke="#94a3b8" />
-          <Tooltip
-            formatter={(value: any) => {
-              const numeric = typeof value === "number" ? value : Number(value);
-              return [formatter(numeric), "Absolute Lift"];
-            }}
-          />
-          <Bar dataKey="value" name="Absolute Lift" fill="#0f172a" radius={[8, 8, 0, 0]} />
-        </BarChart>
-      </ResponsiveContainer>
-    </div>
-  );
-}
-
-function ConfidenceIntervalChart({
-  metricType,
-  estimate,
-  low,
-  high,
-}: {
-  metricType: "binary" | "continuous";
-  estimate: number;
-  low: number;
-  high: number;
-}) {
-  const scale = metricType === "binary" ? 100 : 1;
-
-  const scaledLow = low * scale;
-  const scaledEstimate = estimate * scale;
-  const scaledHigh = high * scale;
-
-  const spread = Math.abs(scaledHigh - scaledLow) || 1;
-  const minDomain = Math.min(0, scaledLow) - spread * 0.25;
-  const maxDomain = Math.max(0, scaledHigh) + spread * 0.25;
-
-  const chartData = [
-    { x: scaledLow, y: 1, z: 8, label: "Lower bound" },
-    { x: scaledEstimate, y: 1, z: 14, label: "Point estimate" },
-    { x: scaledHigh, y: 1, z: 8, label: "Upper bound" },
-  ];
-
-  const formatter = (value: number) =>
-    metricType === "binary" ? `${value.toFixed(2)} pp` : value.toFixed(2);
-
-  return (
-    <div className="h-72 w-full">
-      <ResponsiveContainer width="100%" height="100%">
-        <ScatterChart margin={{ top: 20, right: 24, left: 24, bottom: 20 }}>
-          <CartesianGrid strokeDasharray="3 3" />
-          <XAxis
-            type="number"
-            dataKey="x"
-            domain={[minDomain, maxDomain]}
-            tickFormatter={(value) => formatter(Number(value))}
-          />
-          <YAxis type="number" dataKey="y" domain={[0, 2]} hide />
-          <ZAxis type="number" dataKey="z" range={[60, 220]} />
-          <Tooltip
-            cursor={{ strokeDasharray: "3 3" }}
-            formatter={(value: any, _name: any, props: any) => {
-              if (props?.payload?.label) {
-                return [formatter(props.payload.x), props.payload.label];
-              }
-              return [String(value ?? ""), ""];
-            }}
-          />
-          <ReferenceLine x={0} stroke="#94a3b8" />
-          <ReferenceLine
-            segment={[
-              { x: scaledLow, y: 1 },
-              { x: scaledHigh, y: 1 },
-            ]}
-            stroke="#93c5fd"
-            strokeWidth={4}
-          />
-          <Scatter data={chartData} fill="#2563eb" />
-        </ScatterChart>
-      </ResponsiveContainer>
-    </div>
-  );
-}
-
 function AnalysisPageContent() {
   const searchParams = useSearchParams();
 
@@ -232,7 +114,7 @@ function AnalysisPageContent() {
       if (!fileId || !treatmentColumn || !outcomeColumn) return;
 
       try {
-        const diagPayloadBase = {
+        const basePayload = {
           file_id: fileId,
           treatment_column: treatmentColumn,
           outcome_column: outcomeColumn,
@@ -246,7 +128,7 @@ function AnalysisPageContent() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            ...diagPayloadBase,
+            ...basePayload,
             expected_proportions: null,
           }),
         });
@@ -260,7 +142,7 @@ function AnalysisPageContent() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            ...diagPayloadBase,
+            ...basePayload,
             expected_proportions: expectedProportions,
           }),
         });
@@ -270,21 +152,21 @@ function AnalysisPageContent() {
           setDiagnostics(finalDiagData);
         }
 
-        const trustResponse = await fetch(`${API_BASE_URL}/trust-score`, {
+        const trustRes = await fetch(`${API_BASE_URL}/trust-score`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            ...diagPayloadBase,
+            ...basePayload,
             expected_proportions: expectedProportions,
           }),
         });
 
-        if (trustResponse.ok) {
-          const trustData: TrustScoreResponse = await trustResponse.json();
+        if (trustRes.ok) {
+          const trustData: TrustScoreResponse = await trustRes.json();
           setTrust(trustData);
         }
       } catch {
-        // keep page usable
+        // Keep page usable even if diagnostics/trust fetch fails
       }
     };
 
@@ -370,6 +252,18 @@ function AnalysisPageContent() {
     return result.metric_type === "binary" ? `${value.toFixed(2)}%` : value.toFixed(2);
   };
 
+  const absoluteLiftText = result
+    ? result.metric_type === "binary"
+      ? `${(result.effect.absolute_lift * 100).toFixed(2)} pp`
+      : result.effect.absolute_lift.toFixed(2)
+    : "";
+
+  const relativeLiftText = result
+    ? result.effect.relative_lift !== null
+      ? `${(result.effect.relative_lift * 100).toFixed(2)}%`
+      : "N/A"
+    : "";
+
   const ciText = result
     ? result.metric_type === "binary"
       ? `[${(result.confidence_interval_95.low * 100).toFixed(2)}, ${(
@@ -412,9 +306,15 @@ function AnalysisPageContent() {
         </p>
 
         <div className="mt-4 rounded-lg bg-slate-100 p-4 text-sm text-slate-700">
-          <p><span className="font-medium">File ID:</span> {fileId || "Not found"}</p>
-          <p><span className="font-medium">Treatment Column:</span> {treatmentColumn || "Not found"}</p>
-          <p><span className="font-medium">Outcome Column:</span> {outcomeColumn || "Not found"}</p>
+          <p>
+            <span className="font-medium">File ID:</span> {fileId || "Not found"}
+          </p>
+          <p>
+            <span className="font-medium">Treatment Column:</span> {treatmentColumn || "Not found"}
+          </p>
+          <p>
+            <span className="font-medium">Outcome Column:</span> {outcomeColumn || "Not found"}
+          </p>
         </div>
 
         {trust && (
@@ -455,9 +355,7 @@ function AnalysisPageContent() {
               </div>
             ) : (
               <div className="mt-6 rounded-2xl border border-emerald-200 bg-emerald-50 p-6 shadow-sm">
-                <h2 className="text-xl font-semibold text-emerald-800">
-                  Healthy Experiment Signals
-                </h2>
+                <h2 className="text-xl font-semibold text-emerald-800">Healthy Experiment Signals</h2>
                 <p className="mt-2 text-emerald-700">
                   No major diagnostic warnings were detected before analysis.
                 </p>
@@ -522,58 +420,57 @@ function AnalysisPageContent() {
               </div>
             </div>
 
-            <div className="grid gap-6 lg:grid-cols-2">
+            <div className="grid gap-6 lg:grid-cols-3">
               <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
                 <div className="flex items-center gap-2">
                   <h2 className="text-xl font-semibold">Effect Size</h2>
-                  <InfoTooltip text="Absolute lift shows the raw change between treatment and control. Relative lift shows the percentage change relative to control." />
+                  <InfoTooltip text="Absolute lift is the raw change between treatment and control. Relative lift is the percentage change relative to control." />
                 </div>
 
-                <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                <div className="mt-4 space-y-4">
                   <div className="rounded-xl bg-slate-100 p-4">
                     <p className="text-sm text-slate-500">Absolute Lift</p>
-                    <p className="mt-1 text-xl font-semibold">
-                      {result.metric_type === "binary"
-                        ? `${(result.effect.absolute_lift * 100).toFixed(2)} pp`
-                        : result.effect.absolute_lift.toFixed(2)}
-                    </p>
+                    <p className="mt-1 text-xl font-semibold">{absoluteLiftText}</p>
                   </div>
                   <div className="rounded-xl bg-slate-100 p-4">
                     <p className="text-sm text-slate-500">Relative Lift</p>
+                    <p className="mt-1 text-xl font-semibold">{relativeLiftText}</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm lg:col-span-2">
+                <div className="flex items-center gap-2">
+                  <h2 className="text-xl font-semibold">Confidence Interval</h2>
+                  <InfoTooltip text="The confidence interval shows the plausible range for the treatment effect." />
+                </div>
+
+                <div className="mt-4 grid gap-4 sm:grid-cols-3">
+                  <div className="rounded-xl bg-slate-100 p-4">
+                    <p className="text-sm text-slate-500">Lower Bound</p>
                     <p className="mt-1 text-xl font-semibold">
-                      {result.effect.relative_lift !== null
-                        ? `${(result.effect.relative_lift * 100).toFixed(2)}%`
-                        : "N/A"}
+                      {result.metric_type === "binary"
+                        ? `${(result.confidence_interval_95.low * 100).toFixed(2)} pp`
+                        : result.confidence_interval_95.low.toFixed(2)}
+                    </p>
+                  </div>
+                  <div className="rounded-xl bg-slate-100 p-4">
+                    <p className="text-sm text-slate-500">Point Estimate</p>
+                    <p className="mt-1 text-xl font-semibold">{absoluteLiftText}</p>
+                  </div>
+                  <div className="rounded-xl bg-slate-100 p-4">
+                    <p className="text-sm text-slate-500">Upper Bound</p>
+                    <p className="mt-1 text-xl font-semibold">
+                      {result.metric_type === "binary"
+                        ? `${(result.confidence_interval_95.high * 100).toFixed(2)} pp`
+                        : result.confidence_interval_95.high.toFixed(2)}
                     </p>
                   </div>
                 </div>
 
-                <div className="mt-6">
-                  <AbsoluteLiftChart
-                    metricType={result.metric_type}
-                    absoluteLift={result.effect.absolute_lift}
-                  />
-                </div>
-              </div>
-
-              <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-                <div className="flex items-center gap-2">
-                  <h2 className="text-xl font-semibold">Confidence Interval</h2>
-                  <InfoTooltip text="The confidence interval shows the plausible range for the treatment effect. If it crosses zero, the effect may not be statistically distinguishable from no effect." />
-                </div>
-
-                <div className="mt-4 rounded-xl bg-slate-100 p-4">
+                <div className="mt-4 rounded-xl bg-slate-50 p-4">
                   <p className="text-sm text-slate-500">95% Confidence Interval</p>
-                  <p className="mt-1 text-xl font-semibold">{ciText}</p>
-                </div>
-
-                <div className="mt-6">
-                  <ConfidenceIntervalChart
-                    metricType={result.metric_type}
-                    estimate={result.effect.absolute_lift}
-                    low={result.confidence_interval_95.low}
-                    high={result.confidence_interval_95.high}
-                  />
+                  <p className="mt-1 text-lg font-semibold">{ciText}</p>
                 </div>
               </div>
             </div>
@@ -581,7 +478,7 @@ function AnalysisPageContent() {
             <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
               <div className="flex items-center gap-2">
                 <h2 className="text-xl font-semibold">Statistical Test</h2>
-                <InfoTooltip text="This section summarizes the hypothesis test used to compare control and treatment, including the test statistic and p-value." />
+                <InfoTooltip text="This section summarizes the hypothesis test used to compare control and treatment." />
               </div>
 
               <div className="mt-4 grid gap-4 sm:grid-cols-4">
